@@ -94,7 +94,7 @@ function model(){
  let coaching=avgA([pct('Total Coaching Halves',v('Total Coaching Halves',r)),pct('Total Check Halves',v('Total Check Halves',r)),pct('Total Single Halves',v('Total Single Halves',r))]); coaching=coaching==null?null:coaching*100;
  let progress=pct('Q2 vs Q1 Progress',v('Q2 vs Q1 Progress',r)); progress=progress==null?null:progress*100;
  let dims={commercial,activity,coverage,customer,productivity,coaching,progress},score=0,weight=0;Object.keys(W).forEach(k=>{if(dims[k]!=null){score+=dims[k]*W[k];weight+=W[k]}});r['Performance Score']=weight?+(score/weight).toFixed(1):null;
- const inputs=['Total Ach.%','AM Ach.%','PM Ach.%','AM Call Rate','PM Call Rate','AM Coverage','AM PHD Coverage','PM Coverage','PM Coverage by Frequency','GL Coverage','Coverage of Served Customers','Class A%','Class C%','Standard Master File','Actual Master File','ROI of Served Customers','Total Coaching Halves','Total Check Halves','Total Single Halves','Q1 Ach.%','Q2 Ach.%','Q2 vs Q1 Progress'];r['Score Data Completeness']=inputs.filter(k=>v(k,r)!=null).length/inputs.length;
+ const inputs=['Total Ach.%','AM Ach.%','PM Ach.%','AM Call Rate','PM Call Rate','AM Coverage','AM PHD Coverage','PM Coverage','PM Coverage by Frequency','GL Coverage','Coverage of Served Customers','Class A%','Class C%','Standard Master File','Actual Master File','ROI of Served Customers','Total Coaching Halves','Total Check Halves','Total Single Halves','Q1 Ach.%','Q2 Ach.%','Q3 Ach.%','Q4 Ach.%','Q2 vs Q1 Progress'];r['Score Data Completeness']=inputs.filter(k=>v(k,r)!=null).length/inputs.length;
  let ach=v('Total Ach.%',r);r['Performance Classification']=ach==null?'Insufficient Data':ach<CONFIG.classCritical?'Critical Low Performer':ach<CONFIG.classLow?'Low Performer':ach<CONFIG.classNeeds?'Needs Improvement':ach<CONFIG.classStable?'Stable / Average':ach<CONFIG.classGood?'Good Performer':'High Performer';
 })}
 model();
@@ -167,7 +167,7 @@ const MONTHLY_NUMERIC_FIELDS=[
  'PM Call Rate','PM Coverage','PM Coverage by Frequency','PM Coaching Halves','Standard Master File','Actual Master File','Class A%','Class C%','PM Sales Value','PM FCT Value','PM Ach.%',
  'Total Coaching Halves','Total Check Halves','Total Single Halves','GL Coverage','ROI of Served Customers','Coverage of Served Customers',
  'Total Sales Value','Total FCT Value','Total Ach.%',
- 'Q1 Ach.%','Q2 Ach.%','Q2 vs Q1 Progress'
+ 'Q1 Ach.%','Q2 Ach.%','Q3 Ach.%','Q4 Ach.%','Q2 vs Q1 Progress'
 ];
 
 function parseExcelNumber(x){
@@ -207,12 +207,14 @@ const HEADER_CANON_FIELDS=[
  'PM Call Rate','PM Coverage','PM Coverage by Frequency','PM Coaching Halves','Standard Master File','Actual Master File','Class A%','Class C%','PM Sales Value','PM FCT Value','PM Ach.%',
  'Total Coaching Halves','Total Check Halves','Total Single Halves','GL Coverage','ROI of Served Customers','Coverage of Served Customers',
  'Total Sales Value','Total FCT Value','Total Ach.%',
- 'Q1 Ach.%','Q2 Ach.%','Q2 vs Q1 Progress'
+ 'Q1 Ach.%','Q2 Ach.%','Q3 Ach.%','Q4 Ach.%','Q2 vs Q1 Progress'
 ];
 const HEADER_EXTRA_ALIASES={
  'business unit':'Business Unite',
  'q1 ach':'Q1 Ach.%','q1 ach%':'Q1 Ach.%','q1 achievement':'Q1 Ach.%','q1 achievement%':'Q1 Ach.%','q1':'Q1 Ach.%',
  'q2 ach':'Q2 Ach.%','q2 acg':'Q2 Ach.%','q2 ach%':'Q2 Ach.%','q2 achievement':'Q2 Ach.%','q2 achievement%':'Q2 Ach.%','q2':'Q2 Ach.%',
+ 'q3 ach':'Q3 Ach.%','q3 ach%':'Q3 Ach.%','q3 achievement':'Q3 Ach.%','q3 achievement%':'Q3 Ach.%','q3':'Q3 Ach.%',
+ 'q4 ach':'Q4 Ach.%','q4 ach%':'Q4 Ach.%','q4 achievement':'Q4 Ach.%','q4 achievement%':'Q4 Ach.%','q4':'Q4 Ach.%',
  'q2 vs q1 progress':'Q2 vs Q1 Progress','q2vsq1 progress':'Q2 vs Q1 Progress','progress (q2 vs q1)':'Q2 vs Q1 Progress','progress':'Q2 vs Q1 Progress',
  'area':'Areas','area name':'Areas'
 };
@@ -423,6 +425,8 @@ function page1(a,b){
  ${card('Avg Single Halves',fmtN(avg(a,'Total Single Halves')))}
  ${card('Avg Q1 Ach.%',fmtPct(avg(a,'Q1 Ach.%')))}
  ${card('Avg Q2 Ach.%',fmtPct(avg(a,'Q2 Ach.%')))}
+ ${card('Avg Q3 Ach.%',fmtPct(avg(a,'Q3 Ach.%')))}
+ ${card('Avg Q4 Ach.%',fmtPct(avg(a,'Q4 Ach.%')))}
  ${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 vs Q1 Progress')))}
  ${card('Low Performers',low,fmtPct(low/(a.length||1)))}
  ${card('Critical Low',crit,fmtPct(crit/(a.length||1)))}
@@ -471,13 +475,13 @@ function page1(a,b){
  let bot=[...validAch].sort((x,y)=>x.__displayAch-y.__displayAch).slice(0,10);
 
  document.getElementById('p1top').innerHTML=top.length
-  ? table(top,[['DM Name','DM'],['Team','Team'],['Business Unite','BU'],['__displayAch','Ach.',fmtPct],['Q1 Ach.%','Q1',fmtPct],['Q2 Ach.%','Q2',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct],['__displayScore','Score',fmtN],['Main Gap','Main Gap']])
+  ? table(top,[['DM Name','DM'],['Team','Team'],['Business Unite','BU'],['__displayAch','Ach.',fmtPct],['Q1 Ach.%','Q1',fmtPct],['Q2 Ach.%','Q2',fmtPct],['Q3 Ach.%','Q3',fmtPct],['Q4 Ach.%','Q4',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct],['__displayScore','Score',fmtN],['Main Gap','Main Gap']])
   : `<div class="insight">No valid Performance Scores are available for this selection.</div>`;
 
  const bottomEl=document.getElementById('p1bottom');
  if(bot.length){
    bottomEl.innerHTML=`<div class="scroll"><table><thead><tr>
-     <th>DM</th><th>Team</th><th>BU</th><th>Ach.</th><th>AM</th><th>PM</th><th>Q1</th><th>Q2</th><th>Progress</th><th>Main Gap</th><th>Priority</th>
+     <th>DM</th><th>Team</th><th>BU</th><th>Ach.</th><th>AM</th><th>PM</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Progress</th><th>Main Gap</th><th>Priority</th>
    </tr></thead><tbody>${
      bot.map(r=>`<tr>
        <td>${esc(r['DM Name'])}</td>
@@ -488,6 +492,8 @@ function page1(a,b){
        <td>${fmtPct(r['PM Ach.%'])}</td>
        <td>${fmtPct(r['Q1 Ach.%'])}</td>
        <td>${fmtPct(r['Q2 Ach.%'])}</td>
+       <td>${fmtPct(r['Q3 Ach.%'])}</td>
+       <td>${fmtPct(r['Q4 Ach.%'])}</td>
        <td>${fmtPct(r['Q2 vs Q1 Progress'])}</td>
        <td>${esc(r['Main Gap'])}</td>
        <td>${badge(r['Priority'])}</td>
@@ -526,7 +532,7 @@ function page2(a,b){
  }
  el.innerHTML=`<div class="scroll"><table><thead><tr>
    <th>DM</th><th>Team</th><th>BU</th><th>Governorate</th><th>Tenure</th>
-   <th>Sales</th><th>Ach.</th><th>AM</th><th>PM</th><th>Q1</th><th>Q2</th><th>Progress</th>
+   <th>Sales</th><th>Ach.</th><th>AM</th><th>PM</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Progress</th>
    <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>GL Coverage</th><th>ROI</th>
    <th>Total Coaching</th><th>Check Halves</th><th>Single Halves</th>
    <th>Score</th><th>Class</th><th>Main Gap</th><th>Priority</th>
@@ -543,6 +549,8 @@ function page2(a,b){
    <td>${fmtPct(r['PM Ach.%'])}</td>
    <td>${fmtPct(r['Q1 Ach.%'])}</td>
    <td>${fmtPct(r['Q2 Ach.%'])}</td>
+   <td>${fmtPct(r['Q3 Ach.%'])}</td>
+   <td>${fmtPct(r['Q4 Ach.%'])}</td>
    <td>${fmtPct(r['Q2 vs Q1 Progress'])}</td>
    <td>${fmtPct(r['AM Call Rate'])}</td>
    <td>${fmtPct(r['PM Call Rate'])}</td>
@@ -605,7 +613,7 @@ function page3(a,b){
 
  el.innerHTML=`<div class="scroll"><table><thead><tr>
  <th>DM</th><th>Team</th><th>BU</th><th>Class</th><th>Total Ach.</th>
- <th>AM Ach.</th><th>PM Ach.</th><th>Q1</th><th>Q2</th><th>Progress</th><th>Main Gap</th><th>KPI Gaps</th>
+ <th>AM Ach.</th><th>PM Ach.</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Progress</th><th>Main Gap</th><th>KPI Gaps</th>
  <th>Priority</th><th>Recommended Action</th>
  </tr></thead><tbody>${
  rows.map(r=>`<tr>
@@ -618,6 +626,8 @@ function page3(a,b){
     <td>${fmtPct(r['PM Ach.%'])}</td>
     <td>${fmtPct(r['Q1 Ach.%'])}</td>
     <td>${fmtPct(r['Q2 Ach.%'])}</td>
+    <td>${fmtPct(r['Q3 Ach.%'])}</td>
+    <td>${fmtPct(r['Q4 Ach.%'])}</td>
     <td>${fmtPct(r['Q2 vs Q1 Progress'])}</td>
     <td>${esc(r['Main Gap'])}</td>
     <td>${fmtN(r['KPI Gaps'])}</td>
@@ -727,7 +737,7 @@ function page10(a,b){
  <div class="panel"><h3>Scoring Methodology</h3><div class="insight">Commercial ${(CONFIG.wCommercial*100).toFixed(0)}% (Total/AM/PM achievement, each capped at 150%); Activity ${(CONFIG.wActivity*100).toFixed(0)}% (AM/PM Call Rate); Coverage ${(CONFIG.wCoverage*100).toFixed(0)}% (AM/PM Coverage, AM PHD Coverage, PM Coverage Frequency, Served Coverage, GL Coverage); Customer Quality ${(CONFIG.wCustomer*100).toFixed(0)}% (Class A, inverse Class C, master-file ratio); Productivity ${(CONFIG.wProductivity*100).toFixed(0)}% (ROI); Coaching Activity ${(CONFIG.wCoaching*100).toFixed(0)}% (Total/Check/Single Halves the DM performed with their team); Progress ${(CONFIG.wProgress*100).toFixed(0)}% (Q2 vs Q1 Achievement change). Missing KPIs are handled by re-normalizing the available dimension weights. Data Completeness shows the evidence coverage. The Top 10 list excludes Low/Critical DMs because they are intervention cases, even if another dimension is strong.</div></div>`;
  plot('p10hist',[{x:a.map(r=>r['Performance Score']),type:'histogram',nbinsx:20}],{xaxis:{title:'Performance Score'},yaxis:{title:'DMs'}});
  let rows=[...a].sort((x,y)=>(y['Performance Score']||0)-(x['Performance Score']||0)).slice(0,15);
- b.querySelector('#p10table').innerHTML=table(rows,[['DM Name','DM'],['Team','Team'],['Performance Score','Score',fmtN],['Score Data Completeness','Data',fmtPct],['Total Ach.%','Ach.',fmtPct],['Q1 Ach.%','Q1',fmtPct],['Q2 Ach.%','Q2',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct],['Main Gap','Gap'],['Priority','Priority',badge]]);
+ b.querySelector('#p10table').innerHTML=table(rows,[['DM Name','DM'],['Team','Team'],['Performance Score','Score',fmtN],['Score Data Completeness','Data',fmtPct],['Total Ach.%','Ach.',fmtPct],['Q1 Ach.%','Q1',fmtPct],['Q2 Ach.%','Q2',fmtPct],['Q3 Ach.%','Q3',fmtPct],['Q4 Ach.%','Q4',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct],['Main Gap','Gap'],['Priority','Priority',badge]]);
 }
 
 function page11(a,b){
@@ -1014,6 +1024,8 @@ function exportToExcel(){
    'PM Ach.%': num(r['PM Ach.%']),
    'Q1 Ach.%': num(r['Q1 Ach.%']),
    'Q2 Ach.%': num(r['Q2 Ach.%']),
+   'Q3 Ach.%': num(r['Q3 Ach.%']),
+   'Q4 Ach.%': num(r['Q4 Ach.%']),
    'Q2 vs Q1 Progress': num(r['Q2 vs Q1 Progress']),
    'AM Call Rate': num(r['AM Call Rate']),
    'PM Call Rate': num(r['PM Call Rate']),

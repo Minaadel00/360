@@ -174,7 +174,7 @@ const MONTHLY_NUMERIC_FIELDS=[
  'Total Working Hours','Total Coaching Halves','ROI of Served Customers',
  'Customers count above 3K','Customers visited 12 or more times','Coverage of Served Customers',
  'Total Sales Value','Total FCT Value','Total Ach.%',
- 'Q1 Ach%','Q2 Ach%','Q2 Vs Q1 Progress'
+ 'Q1 Ach%','Q2 Ach%','Q3 Ach%','Q4 Ach%','Q2 Vs Q1 Progress'
 ];
 
 function parseExcelNumber(x){
@@ -422,6 +422,8 @@ function page1(a,b){
  ${card('Avg ROI',fmtPct(avg(a,'ROI of Served Customers')))}
  ${card('Avg Q1 Ach.%',fmtPct(avg(a,'Q1 Ach%')))}
  ${card('Avg Q2 Ach.%',fmtPct(avg(a,'Q2 Ach%')))}
+ ${card('Avg Q3 Ach.%',fmtPct(avg(a,'Q3 Ach%')))}
+ ${card('Avg Q4 Ach.%',fmtPct(avg(a,'Q4 Ach%')))}
  ${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 Vs Q1 Progress')))}
  ${card('Low Performers',low,fmtPct(low/(a.length||1)))}
  ${card('Critical Low',crit,fmtPct(crit/(a.length||1)))}
@@ -575,7 +577,7 @@ function page2(a,b){
    <th>MR</th><th>Team</th><th>DM</th><th>Governorate</th><th>Tenure</th>
    <th>Sales</th><th>Ach.</th><th>AM</th><th>PM</th><th>Hours</th>
    <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>ROI</th><th>&gt;3K</th><th>12+ Visits</th>
-   <th>Q1 Ach.%</th><th>Q2 Ach.%</th><th>Progress</th>
+   <th>Q1 Ach.%</th><th>Q2 Ach.%</th><th>Q3 Ach.%</th><th>Q4 Ach.%</th><th>Progress</th>
    <th>Score</th><th>Class</th><th>Main Gap</th><th>Priority</th>
  </tr></thead><tbody>${
  rows.map(r=>`<tr>
@@ -600,6 +602,8 @@ function page2(a,b){
    <td>${fmtN(r['Customers visited 12 or more times'])}</td>
    <td>${fmtPct(r['Q1 Ach%'])}</td>
    <td>${fmtPct(r['Q2 Ach%'])}</td>
+   <td>${fmtPct(r['Q3 Ach%'])}</td>
+   <td>${fmtPct(r['Q4 Ach%'])}</td>
    <td>${fmtPct(r['Q2 Vs Q1 Progress'])}</td>
    <td>${fmtN(r['Performance Score'])}</td>
    <td>${esc(r['Performance Classification'])}</td>
@@ -1110,6 +1114,8 @@ function exportToExcel(){
    'Total Coaching Halves': num(r['Total Coaching Halves']),
    'Q1 Ach%': num(r['Q1 Ach%']),
    'Q2 Ach%': num(r['Q2 Ach%']),
+   'Q3 Ach%': num(r['Q3 Ach%']),
+   'Q4 Ach%': num(r['Q4 Ach%']),
    'Q2 Vs Q1 Progress': num(r['Q2 Vs Q1 Progress']),
    'Performance Score': num(r['Performance Score']),
    'Performance Classification': r['Performance Classification'],
