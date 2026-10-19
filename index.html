@@ -46,6 +46,9 @@
     font-size:13px;
     color:#aeb8d4;
   }
+  header nav{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  header nav a,header nav button{color:#fff;text-decoration:none;font:inherit;font-size:12px;padding:7px 10px;border:1px solid #ffffff55;border-radius:5px;background:transparent;cursor:pointer}
+  header nav .user-label{font-size:12px;color:#d7e1ef}
   main{
     flex:1;
     display:flex;
@@ -94,6 +97,7 @@
     transition:border-color .15s ease, box-shadow .15s ease, transform .15s ease;
     position:relative;
   }
+  .card[hidden]{display:none;}
   .card:hover{
     border-color:var(--blue);
     box-shadow:0 4px 18px rgba(37,99,235,0.12);
@@ -150,6 +154,7 @@
 <header>
   <h1>360 Performance Command Center</h1>
   <div class="sub">Choose a dashboard to open</div>
+  <nav id="userNav" aria-label="حساب المستخدم"></nav>
 </header>
 
 <main>
@@ -159,7 +164,7 @@
   </div>
 
   <div class="grid">
-    <a class="card dm" href="dashboards/dm_dashboard_V6.html">
+    <a class="card dm" id="dmCard" href="dashboards/dm_dashboard_V6.html">
       <span class="tag">District Manager</span>
       <h3>DM Effectiveness Command Center</h3>
       <p>District Manager performance diagnostic view — territory and team-level effectiveness metrics.</p>
@@ -168,7 +173,7 @@
       </span>
     </a>
 
-    <a class="card mr" href="dashboards/MR_SFE_Command_Center_YTD_Ready_V17.html">
+    <a class="card mr" id="mrCard" href="dashboards/MR_SFE_Command_Center_YTD_Ready_V17.html">
       <span class="tag">MR</span>
       <h3>MR SFE Command Center</h3>
       <p>Medical Representative sales force effectiveness — year-to-date performance tracking.</p>
@@ -180,6 +185,22 @@
 </main>
 
 <footer>Both dashboards open independently — no data or settings are shared between them.</footer>
+
+<script>
+const USERS_KEY='360_demo_users';
+const SESSION_KEY='360_demo_session';
+let users=[];
+try{users=JSON.parse(localStorage.getItem(USERS_KEY)||'[]')}catch{}
+const username=sessionStorage.getItem(SESSION_KEY);
+const user=users.find(item=>item.username===username);
+if(!user){window.location.replace('login.html')}else{
+  document.getElementById('userNav').innerHTML=`<span class="user-label">${String(user.name||user.username).replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}</span>${user.role==='admin'?'<a href="users.html">إدارة المستخدمين</a>':''}<button id="logout">خروج</button>`;
+  document.getElementById('dmCard').hidden=!user.access?.dm;
+  document.getElementById('mrCard').hidden=!user.access?.mr;
+  document.getElementById('logout').addEventListener('click',()=>{sessionStorage.removeItem(SESSION_KEY);window.location.href='login.html'});
+  if(!user.access?.dm&&!user.access?.mr)document.querySelector('.intro p').textContent='لا توجد لوحات مخصصة لهذا الحساب. تواصل مع مدير النظام.';
+}
+</script>
 
 </body>
 </html>

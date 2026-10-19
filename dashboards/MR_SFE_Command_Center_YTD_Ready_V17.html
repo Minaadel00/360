@@ -51,6 +51,24 @@ table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 6px;b
 
 <script>
 let DATA = [];
+const USERS_KEY='360_demo_users';
+const SESSION_KEY='360_demo_session';
+const SHEET_OPTIONS_KEY='360_demo_sheet_options';
+let demoUsers=[];
+try{demoUsers=JSON.parse(localStorage.getItem(USERS_KEY)||'[]')}catch{}
+const demoUser=demoUsers.find(user=>user.username===sessionStorage.getItem(SESSION_KEY));
+if(!demoUser){window.location.replace('../login.html')}else if(!demoUser.access?.mr){window.location.replace('../index.html')}
+function applyUserScope(rows){
+ if(!demoUser?.access?.mr)return [];
+ const scope=demoUser.scope?.mr||{};
+ return rows.filter(row=>Object.entries(scope).every(([field,allowed])=>!Array.isArray(allowed)||!allowed.length||allowed.includes(String(row[field]??'').trim())));
+}
+function storeDashboardOptions(rows,key,fields){
+ let saved={};
+ try{saved=JSON.parse(localStorage.getItem(SHEET_OPTIONS_KEY)||'{}')}catch{}
+ saved[key]=Object.fromEntries(fields.map(field=>[field,[...new Set(rows.map(row=>row[field]).filter(value=>value!=null&&String(value).trim()!=='').map(value=>String(value).trim()))].sort((a,b)=>a.localeCompare(b))]));
+ localStorage.setItem(SHEET_OPTIONS_KEY,JSON.stringify(saved));
+}
 const pages = [
 ['p1','Executive Overview'],['p2','MR Performance'],['p3','Low Performer Command Center'],['p4','AM vs PM'],
 ['p5','Activity & Productivity'],['p6','Customer Quality & Master File'],['p7','Team & DM Performance'],
@@ -342,8 +360,9 @@ async function loadMonthlyExcel(input){
    const missing=required.filter(k=>!rows.some(r=>Object.prototype.hasOwnProperty.call(r,k)));
    if(missing.length) throw new Error('Missing required columns: '+missing.join(', '));
 
-   addBasicDerivedRows(rows);
-   DATA=rows;
+  addBasicDerivedRows(rows);
+  storeDashboardOptions(rows,'mr',['Business Unite','Team','DM Name','Governorate','Tenure Group','MR Name','Part time']);
+  DATA=applyUserScope(rows);
    diagnoseMonthlyRows(DATA);
    model();
 
@@ -370,12 +389,13 @@ async function loadMonthlyExcel(input){
 
 function renderAll(){
  if(!DATA.length){
-   const b=document.getElementById('content');
+   const active=pages.find(p=>document.getElementById(p[0]).classList.contains('active'))?.[0]||'p1';
+   const b=document.getElementById(active+'body');
    if(b){
      b.innerHTML=`<div class="panel" style="padding:40px;text-align:center">
        <h2 style="margin:0 0 10px">MR SFE Command Center</h2>
-       <div style="color:#667085">No YTD data loaded yet.</div>
-       <div style="margin-top:8px;color:#667085;font-size:13px">Use <b>Load Monthly Excel</b> above to upload the latest YTD file.</div>
+       <div style="color:#667085">No matching data is available.</div>
+       <div style="margin-top:8px;color:#667085;font-size:13px">Upload the latest YTD Excel file or ask the administrator to review your data scope.</div>
      </div>`;
    }
    return;

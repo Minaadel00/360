@@ -49,6 +49,24 @@ table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 6px;b
 
 <script>
 let DATA = [];
+const USERS_KEY='360_demo_users';
+const SESSION_KEY='360_demo_session';
+const SHEET_OPTIONS_KEY='360_demo_sheet_options';
+let demoUsers=[];
+try{demoUsers=JSON.parse(localStorage.getItem(USERS_KEY)||'[]')}catch{}
+const demoUser=demoUsers.find(user=>user.username===sessionStorage.getItem(SESSION_KEY));
+if(!demoUser){window.location.replace('../login.html')}else if(!demoUser.access?.dm){window.location.replace('../index.html')}
+function applyUserScope(rows){
+ if(!demoUser?.access?.dm)return [];
+ const scope=demoUser.scope?.dm||{};
+ return rows.filter(row=>Object.entries(scope).every(([field,allowed])=>!Array.isArray(allowed)||!allowed.length||allowed.includes(String(row[field]??'').trim())));
+}
+function storeDashboardOptions(rows,key,fields){
+ let saved={};
+ try{saved=JSON.parse(localStorage.getItem(SHEET_OPTIONS_KEY)||'{}')}catch{}
+ saved[key]=Object.fromEntries(fields.map(field=>[field,[...new Set(rows.map(row=>row[field]).filter(value=>value!=null&&String(value).trim()!=='').map(value=>String(value).trim()))].sort((a,b)=>a.localeCompare(b))]));
+ localStorage.setItem(SHEET_OPTIONS_KEY,JSON.stringify(saved));
+}
 const pages = [
 ['p1','Executive Overview'],['p2','DM Performance Matrix'],['p3','Low Performer Command Center'],['p4','AM vs PM'],
 ['p5','Activity & Productivity'],['p6','Customer Quality & Master File'],['p7','Business Unit & Team Performance'],
@@ -345,8 +363,9 @@ async function loadMonthlyExcel(input){
    const missing=required.filter(k=>!rows.some(r=>Object.prototype.hasOwnProperty.call(r,k)));
    if(missing.length) throw new Error('Missing required columns: '+missing.join(', '));
 
-   addBasicDerivedRows(rows);
-   DATA=rows;
+  addBasicDerivedRows(rows);
+  storeDashboardOptions(rows,'dm',['Business Unite','Team','DM Name','Governorate','Tenure Group']);
+  DATA=applyUserScope(rows);
    diagnoseMonthlyRows(DATA);
    model();
    diagnoseMonthlyRows(DATA);

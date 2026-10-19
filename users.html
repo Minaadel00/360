@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>إدارة المستخدمين | 360</title>
+<style>
+:root{font-family:"Segoe UI",Tahoma,sans-serif;color:#172033;background:#f3f6fa;font-synthesis:none}*{box-sizing:border-box}body{margin:0}.top{background:#142b3c;color:white;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap}.top h1{font-size:19px;margin:0}.top nav{display:flex;gap:8px}.top a,.top button{border:1px solid #ffffff55;background:transparent;color:white;border-radius:5px;padding:8px 11px;text-decoration:none;font:inherit;cursor:pointer}.wrap{max-width:1180px;margin:24px auto;padding:0 18px}.alert{padding:12px 14px;border:1px solid #f5d89b;background:#fff7e6;border-radius:6px;color:#765414;font-size:13px;line-height:1.6;margin-bottom:18px}.heading{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:20px 0 12px}.heading h2{font-size:18px;margin:0}.primary,.action{border:0;border-radius:5px;background:#176b63;color:white;padding:9px 13px;font:inherit;font-weight:600;cursor:pointer}.action{padding:6px 9px;font-size:12px;margin:2px}.secondary{background:#e8eef2;color:#243847}.danger{background:#b42318}.table-wrap{overflow:auto;background:#fff;border:1px solid #dbe3ec;border-radius:7px}table{width:100%;border-collapse:collapse;min-width:740px;font-size:13px}th,td{text-align:right;padding:11px 12px;border-bottom:1px solid #edf0f4;vertical-align:middle}th{background:#f7f9fb;color:#475467;font-size:12px}tr:last-child td{border-bottom:0}.pill{display:inline-block;border-radius:20px;padding:3px 8px;background:#e8f3f1;color:#176b63;font-size:11px}.empty{padding:26px;text-align:center;color:#667085}.shade{position:fixed;inset:0;background:#10233188;display:none;align-items:center;justify-content:center;padding:16px;z-index:5}.shade.open{display:flex}.dialog{width:min(100%,760px);max-height:92vh;overflow:auto;background:#fff;border-radius:8px;padding:22px}.dialog h2{margin:0 0 16px;font-size:19px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.field label{display:block;margin-bottom:5px;font-size:12px;font-weight:600}.field input,.field select{width:100%;height:38px;border:1px solid #cbd5e1;border-radius:5px;padding:7px 9px;font:inherit}.scope{margin-top:18px;border-top:1px solid #e5eaf0;padding-top:14px}.scope h3{font-size:14px;margin:0 0 10px}.scope-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px}.scope-note{font-size:11px;color:#667085;margin:0 0 12px;line-height:1.5}.checks{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0}.checks label{font-size:13px}.checks input{vertical-align:middle}.form-actions{display:flex;justify-content:flex-start;gap:8px;margin-top:20px}.status{min-height:20px;color:#b42318;font-size:12px;margin-top:8px}@media(max-width:620px){.top{padding:14px}.wrap{margin-top:16px}.form-grid,.scope-grid{grid-template-columns:1fr}.dialog{padding:17px}}
+</style>
+</head>
+<body>
+<header class="top"><h1>360 | إدارة المستخدمين والصلاحيات</h1><nav><a href="index.html">لوحة التحكم</a><button id="logout">خروج</button></nav></header>
+<main class="wrap">
+  <div class="alert"><b>نموذج تجريبي فقط:</b> المستخدمون وكلمات المرور ونطاقات الفلاتر محفوظة في localStorage. هذا لا يمنع الوصول لملف Excel من أدوات المتصفح ولا يصلح لتأمين بيانات حقيقية.</div>
+  <div class="heading"><h2>حسابات الموظفين</h2><button id="addUser" class="primary">إضافة مستخدم</button></div>
+  <div id="userTable" class="table-wrap"></div>
+</main>
+<div class="shade" id="editorShade" role="presentation">
+  <section class="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
+    <h2 id="dialogTitle">إضافة مستخدم</h2>
+    <form id="userForm">
+      <input type="hidden" id="originalUsername">
+      <div class="form-grid">
+        <div class="field"><label for="name">اسم الموظف</label><input id="name" required></div>
+        <div class="field"><label for="usernameInput">اسم المستخدم</label><input id="usernameInput" required autocomplete="off"></div>
+        <div class="field"><label for="role">نوع الحساب</label><select id="role"><option value="employee">موظف</option><option value="admin">مدير</option></select></div>
+        <div class="field"><label for="passwordInput">كلمة المرور (مطلوبة عند الإضافة فقط)</label><input id="passwordInput" type="password" autocomplete="new-password"></div>
+      </div>
+        <style>
+          .field select[multiple]{height:auto;min-height:92px;padding:6px}
+        </style>
+      <div class="checks"><label><input id="accessDm" type="checkbox"> السماح بلوحة DM</label><label><input id="accessMr" type="checkbox"> السماح بلوحة MR</label></div>
+      <div class="scope">
+        <h3>نطاق لوحة DM</h3><p class="scope-note">اختر القيم المسموح بها من آخر ملف رُفع للوحة. الاختيار الفارغ يسمح بكل القيم، ويمكن تحديد أكثر من قيمة.</p>
+        <div class="scope-grid" id="dmFields"></div>
+      </div>
+      <div class="scope">
+        <h3>نطاق لوحة MR</h3><p class="scope-note">اختر القيم من ملف لوحة MR. تُطبّق القيود على بيانات MR فقط قبل حساب المؤشرات وعرضها.</p>
+        <div class="scope-grid" id="mrFields"></div>
+      </div>
+      <div class="form-actions"><button class="primary" type="submit">حفظ</button><button class="action secondary" id="cancelEdit" type="button">إلغاء</button></div>
+      <div class="status" id="formStatus" role="alert"></div>
+    </form>
+  </section>
+</div>
+<script>
+const USERS_KEY='360_demo_users';
+const SESSION_KEY='360_demo_session';
+const SHEET_OPTIONS_KEY='360_demo_sheet_options';
+const dmDimensions=[['Business Unite','الوحدة'],['Team','الفريق'],['DM Name','اسم DM'],['Governorate','المحافظة'],['Tenure Group','الأقدمية']];
+const mrDimensions=[...dmDimensions,['MR Name','اسم MR'],['Part time','نوع التوظيف']];
+function users(){try{return JSON.parse(localStorage.getItem(USERS_KEY)||'[]')}catch{return []}}
+function saveUsers(value){localStorage.setItem(USERS_KEY,JSON.stringify(value))}
+function currentUser(){const username=sessionStorage.getItem(SESSION_KEY);return users().find(user=>user.username===username)}
+function sheetOptions(){try{return JSON.parse(localStorage.getItem(SHEET_OPTIONS_KEY)||'{}')}catch{return {}}}
+function renderDimensions(containerId,dimensions,key){const options=sheetOptions()[key]||{};document.getElementById(containerId).innerHTML=dimensions.map(([field,label])=>{const values=options[field]||[];const choices=values.length?values.map(value=>`<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`).join(''):'<option disabled>ارفع ملف Excel لهذه اللوحة أولًا</option>';return `<div class="field"><label for="${key}_${field}">${label}</label><select id="${key}_${field}" data-scope="${key}" data-field="${field}" multiple size="4" aria-label="${label}">${choices}</select></div>`}).join('')}
+function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
+function renderUsers(){const list=users();const target=document.getElementById('userTable');if(!list.length){target.innerHTML='<div class="empty">لا يوجد مستخدمون.</div>';return}target.innerHTML=`<table><thead><tr><th>الموظف</th><th>اسم المستخدم</th><th>الصلاحية</th><th>لوحات الوصول</th><th>إجراءات</th></tr></thead><tbody>${list.map(user=>`<tr><td>${escapeHtml(user.name)}</td><td>${escapeHtml(user.username)}</td><td><span class="pill">${user.role==='admin'?'مدير':'موظف'}</span></td><td>${[user.access?.dm?'DM':'',user.access?.mr?'MR':''].filter(Boolean).join('، ')||'لا توجد'}</td><td><button class="action secondary" data-action="edit" data-user="${escapeHtml(user.username)}">تعديل النطاق</button><button class="action secondary" data-action="reset" data-user="${escapeHtml(user.username)}">إعادة تعيين كلمة المرور</button><button class="action danger" data-action="delete" data-user="${escapeHtml(user.username)}">حذف</button></td></tr>`).join('')}</tbody></table>`}
+function openEditor(user){document.getElementById('userForm').reset();document.getElementById('formStatus').textContent='';document.getElementById('originalUsername').value=user?.username||'';document.getElementById('usernameInput').value=user?.username||'';document.getElementById('usernameInput').readOnly=Boolean(user);document.getElementById('name').value=user?.name||'';document.getElementById('role').value=user?.role||'employee';document.getElementById('accessDm').checked=user?.access?.dm??true;document.getElementById('accessMr').checked=user?.access?.mr??true;document.getElementById('passwordInput').required=!user;document.getElementById('dialogTitle').textContent=user?'تعديل المستخدم':'إضافة مستخدم';for(const select of document.querySelectorAll('[data-scope]')){const selected=user?.scope?.[select.dataset.scope]?.[select.dataset.field]||[];for(const value of selected){if(!Array.from(select.options).some(option=>option.value===value)){const option=document.createElement('option');option.value=value;option.textContent=value+' (غير موجود في آخر ملف)';select.add(option)}}for(const option of select.options)option.selected=selected.includes(option.value)}document.getElementById('editorShade').classList.add('open');document.getElementById('name').focus()}
+function closeEditor(){document.getElementById('editorShade').classList.remove('open')}
+renderDimensions('dmFields',dmDimensions,'dm');renderDimensions('mrFields',mrDimensions,'mr');
+const signedIn=currentUser();
+if(!signedIn){window.location.replace('login.html')}else if(signedIn.role!=='admin'){window.location.replace('index.html')}else{renderUsers()}
+document.getElementById('logout').addEventListener('click',()=>{sessionStorage.removeItem(SESSION_KEY);window.location.href='login.html'});
+document.getElementById('addUser').addEventListener('click',()=>openEditor());
+document.getElementById('cancelEdit').addEventListener('click',closeEditor);
+document.getElementById('editorShade').addEventListener('click',event=>{if(event.target.id==='editorShade')closeEditor()});
+document.getElementById('userTable').addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(!button)return;const user=users().find(item=>item.username===button.dataset.user);if(!user)return;if(button.dataset.action==='edit')openEditor(user);if(button.dataset.action==='reset'){const password=window.prompt(`أدخل كلمة مرور جديدة للمستخدم ${user.username}:`);if(password===null)return;if(password.length<6){window.alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل.');return}saveUsers(users().map(item=>item.username===user.username?{...item,password}:item));window.alert('تم تحديث كلمة المرور التجريبية.')}if(button.dataset.action==='delete'){if(user.username===signedIn.username){window.alert('لا يمكن حذف حسابك الحالي.');return}if(window.confirm(`حذف حساب ${user.username}؟`)){saveUsers(users().filter(item=>item.username!==user.username));renderUsers()}}});
+document.getElementById('userForm').addEventListener('submit',event=>{event.preventDefault();const username=document.getElementById('usernameInput').value.trim();const original=document.getElementById('originalUsername').value;const password=document.getElementById('passwordInput').value;const list=users();if(!original&&list.some(user=>user.username.toLowerCase()===username.toLowerCase())){document.getElementById('formStatus').textContent='اسم المستخدم مستخدم بالفعل.';return}if(!original&&password.length<6){document.getElementById('formStatus').textContent='كلمة المرور يجب أن تكون 6 أحرف على الأقل.';return}const scope={dm:{},mr:{}};for(const select of document.querySelectorAll('[data-scope]'))scope[select.dataset.scope][select.dataset.field]=Array.from(select.selectedOptions).filter(option=>!option.disabled).map(option=>option.value);const item={username,name:document.getElementById('name').value.trim(),role:document.getElementById('role').value,password:password||list.find(user=>user.username===original)?.password,access:{dm:document.getElementById('accessDm').checked,mr:document.getElementById('accessMr').checked},scope};saveUsers(original?list.map(user=>user.username===original?item:user):[...list,item]);closeEditor();renderUsers()});
+</script>
+</body>
+</html>

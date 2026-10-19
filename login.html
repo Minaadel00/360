@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تسجيل الدخول | 360</title>
+<style>
+:root{font-family:"Segoe UI",Tahoma,sans-serif;color:#172033;background:#f3f6fa;font-synthesis:none}*{box-sizing:border-box}body{min-height:100vh;margin:0;display:grid;place-items:center;padding:20px;background:linear-gradient(135deg,#eef4fa,#f8fafc 55%,#e7f0ed)}.login{width:min(100%,420px);background:#fff;border:1px solid #dbe3ec;border-radius:10px;padding:32px;box-shadow:0 16px 40px #18324a12}.mark{font-size:12px;letter-spacing:1px;color:#17766b;font-weight:700}.login h1{font-size:25px;margin:10px 0 6px}.muted{color:#667085;font-size:14px}.warning{margin:22px 0;padding:12px 14px;background:#fff7e6;border:1px solid #f5d89b;border-radius:6px;color:#765414;font-size:12px;line-height:1.6}label{display:block;font-size:13px;font-weight:600;margin:16px 0 6px}input{width:100%;height:42px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font:inherit}input:focus{outline:2px solid #82b9ae;border-color:#17766b}button{width:100%;height:42px;margin-top:20px;border:0;border-radius:6px;background:#176b63;color:#fff;font:inherit;font-weight:700;cursor:pointer}button:hover{background:#12574f}.error{min-height:20px;color:#b42318;font-size:13px;margin-top:12px}.demo{border-top:1px solid #e5eaf0;margin-top:20px;padding-top:14px;color:#667085;font-size:12px;line-height:1.7}
+</style>
+</head>
+<body>
+<main class="login">
+  <div class="mark">360 PERFORMANCE COMMAND CENTER</div>
+  <h1>تسجيل الدخول</h1>
+  <div class="muted">استخدم حسابك لفتح لوحة الأداء المخصصة لك.</div>
+  <div class="warning"><b>نسخة تجريبية:</b> الحسابات ونطاقات البيانات محفوظة في المتصفح ويمكن تجاوزها. لا تستخدم بيانات حقيقية أو حساسة.</div>
+  <form id="loginForm">
+    <label for="username">اسم المستخدم</label>
+    <input id="username" name="username" autocomplete="username" required>
+    <label for="password">كلمة المرور</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+    <button type="submit">دخول</button>
+    <div class="error" id="error" role="alert"></div>
+  </form>
+  <div class="demo">حساب المدير التجريبي: <b>admin</b> / <b>admin123</b></div>
+</main>
+<script>
+const USERS_KEY='360_demo_users';
+const SESSION_KEY='360_demo_session';
+function readUsers(){try{return JSON.parse(localStorage.getItem(USERS_KEY)||'[]')}catch{return []}}
+if(!readUsers().length){localStorage.setItem(USERS_KEY,JSON.stringify([{username:'admin',name:'مدير النظام',password:'admin123',role:'admin',access:{dm:true,mr:true},scope:{dm:{},mr:{}}}]))}
+document.getElementById('loginForm').addEventListener('submit',event=>{
+  event.preventDefault();
+  const username=document.getElementById('username').value.trim();
+  const password=document.getElementById('password').value;
+  const user=readUsers().find(item=>item.username.toLowerCase()===username.toLowerCase()&&item.password===password);
+  if(!user){document.getElementById('error').textContent='اسم المستخدم أو كلمة المرور غير صحيحة.';return}
+  sessionStorage.setItem(SESSION_KEY,user.username);
+  window.location.href='index.html';
+});
+</script>
+</body>
+</html>
