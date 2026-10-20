@@ -424,7 +424,7 @@ function page1(a,b){
  ${card('Avg Q2 Ach.%',fmtPct(avg(a,'Q2 Ach%')))}
  ${card('Avg Q3 Ach.%',fmtPct(avg(a,'Q3 Ach%')))}
  ${card('Avg Q4 Ach.%',fmtPct(avg(a,'Q4 Ach%')))}
- ${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 Vs Q1 Progress')))}
+ ${card('Avg Progress',fmtPct(avg(a,'Q2 Vs Q1 Progress')))}
  ${card('Low Performers',low,fmtPct(low/(a.length||1)))}
  ${card('Critical Low',crit,fmtPct(crit/(a.length||1)))}
  </div>
@@ -576,7 +576,7 @@ function page2(a,b){
  el.innerHTML=`<div class="scroll"><table><thead><tr>
    <th>MR</th><th>Team</th><th>DM</th><th>Governorate</th><th>Tenure</th>
    <th>Sales</th><th>Ach.</th><th>AM</th><th>PM</th><th>Hours</th>
-   <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>ROI</th><th>&gt;3K</th><th>12+ Visits</th>
+   <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>ROI</th><th>&gt;3K</th><th>18+ Visits</th>
    <th>Q1 Ach.%</th><th>Q2 Ach.%</th><th>Q3 Ach.%</th><th>Q4 Ach.%</th><th>Progress</th>
    <th>Score</th><th>Class</th><th>Main Gap</th><th>Priority</th>
  </tr></thead><tbody>${
@@ -635,7 +635,7 @@ function page3(a,b){
  ${card('Avg AM PHD Coverage – Low', fmtPct(avg(lowRows,'AM PHD Coverage')))}
  ${card('Avg PM Coverage – Low', fmtPct(avg(lowRows,'PM Coverage')))}
  ${card('Avg PM Coverage Freq. – Low', fmtPct(avg(lowRows,'PM Coverage by Frequency')))}
- ${card('Avg Progress – Low (Q2 vs Q1)', fmtPct(avg(lowRows,'Q2 Vs Q1 Progress')))}
+ ${card('Avg Progress – Low', fmtPct(avg(lowRows,'Q2 Vs Q1 Progress')))}
  </div>
  <div class="panel">
    <h3>Low Performer Intervention Queue</h3>
@@ -770,14 +770,14 @@ function page5(a,b){
  renderCallRateAnalysis('PM Call Rate','PM Call Rate','p5sc2pm','p5diagpm');
 }
 function page6(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtN(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg >3K Customers',fmtN(avg(a,'Customers count above 3K')))}${card('Avg 12+ Visits',fmtN(avg(a,'Customers visited 12 or more times')))}${card('Avg Served Coverage',fmtPct(avg(a,'Coverage of Served Customers')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtN(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg >3K Customers',fmtN(avg(a,'Customers count above 3K')))}${card('Avg 18+ Visits',fmtN(avg(a,'Customers visited 12 or more times')))}${card('Avg Served Coverage',fmtPct(avg(a,'Coverage of Served Customers')))}</div>
  <div class="two"><div class="panel"><h3>Class A vs Class C</h3><div id="p6bar" class="smallplot"></div></div><div class="panel"><h3>Master File Gap</h3><div id="p6mf" class="smallplot"></div></div></div>
  <div class="panel"><h3>Customer Quality Flags</h3><div id="p6table"></div></div>`;
  plot('p6bar',[{x:['Class A%','Class C%'],y:[avg(a,'Class A%')*100,avg(a,'Class C%')*100],type:'bar',text:[fmtPct(avg(a,'Class A%')),fmtPct(avg(a,'Class C%'))],textposition:'auto'}],{yaxis:{title:'%'}});
  let gap=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,15);
  plot('p6mf',[{x:gap.map(r=>r['MR Name']),y:gap.map(r=>r['Master File Gap']),type:'bar'}],{yaxis:{title:'Standard - Actual'},xaxis:{tickangle:-45}});
  let rows=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,30);
- b.querySelector('#p6table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtN],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['Customers count above 3K','>3K',fmtN],['Customers visited 12 or more times','12+ Visits',fmtN],['ROI of Served Customers','ROI',fmtPct]]);
+ b.querySelector('#p6table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtN],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['Customers count above 3K','>3K',fmtN],['Customers visited 12 or more times','18+ Visits',fmtN],['ROI of Served Customers','ROI',fmtPct]]);
 }
 function page7(a,b){
  let teams=[...new Set(a.map(r=>r.Team))]; let teamRows=teams.map(t=>{let x=a.filter(r=>r.Team===t);return {Team:t,MRs:x.length,Sales:sum(x,'Total Sales Value'),Ach:avg(x,'Total Ach.%'),Low:count(x,r=>['Critical Low Performer','Low Performer'].includes(r['Performance Classification'])),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}).sort((x,y)=>y.Ach-x.Ach);
@@ -884,7 +884,7 @@ function page13(a,b){
    <tr><td style="padding:6px 8px">Customer Quality</td><td><input id="cfgWCustomer" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
    <tr><td style="padding:6px 8px">Productivity</td><td><input id="cfgWProductivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
    <tr><td style="padding:6px 8px">Development</td><td><input id="cfgWDevelopment" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Progress (Q2 vs Q1)</td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px">Progress</td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
   </table>
   <div id="cfgWeightSum" class="hint" style="margin-top:6px"></div>
  </div>
