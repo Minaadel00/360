@@ -427,7 +427,7 @@ function page1(a,b){
  ${card('Avg Q2 Ach.%',fmtPct(avg(a,'Q2 Ach.%')))}
  ${card('Avg Q3 Ach.%',fmtPct(avg(a,'Q3 Ach.%')))}
  ${card('Avg Q4 Ach.%',fmtPct(avg(a,'Q4 Ach.%')))}
- ${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 vs Q1 Progress')))}
+ ${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}
  ${card('Low Performers',low,fmtPct(low/(a.length||1)))}
  ${card('Critical Low',crit,fmtPct(crit/(a.length||1)))}
  </div>
@@ -588,7 +588,7 @@ function page3(a,b){
  ${card('Avg AM Coverage – Low', fmtPct(avg(lowRows,'AM Coverage')))}
  ${card('Avg PM Coverage – Low', fmtPct(avg(lowRows,'PM Coverage')))}
  ${card('Avg GL Coverage – Low', fmtPct(avg(lowRows,'GL Coverage')))}
- ${card('Avg Progress (Q2 vs Q1) – Low', fmtPct(avg(lowRows,'Q2 vs Q1 Progress')))}
+ ${card('Avg Progress – Low', fmtPct(avg(lowRows,'Q2 vs Q1 Progress')))}
  ${card('Avg Total Coaching Halves – Low', fmtN(avg(lowRows,'Total Coaching Halves')))}
  ${card('Avg Check Halves – Low', fmtN(avg(lowRows,'Total Check Halves')))}
  ${card('Avg Single Halves – Low', fmtN(avg(lowRows,'Total Single Halves')))}
@@ -638,7 +638,7 @@ function page3(a,b){
 }
 
 function page4(a,b){
- b.innerHTML=`<div class="grid">${card('AM Ach.%',fmtPct(avg(a,'AM Ach.%')))}${card('PM Ach.%',fmtPct(avg(a,'PM Ach.%')))}${card('AM Sales',fmtMoney(sum(a,'AM Sales Value')))}${card('PM Sales',fmtMoney(sum(a,'PM Sales Value')))}${card('AM Coverage',fmtPct(avg(a,'AM Coverage')))}${card('PM Coverage',fmtPct(avg(a,'PM Coverage')))}${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
+ b.innerHTML=`<div class="grid">${card('AM Ach.%',fmtPct(avg(a,'AM Ach.%')))}${card('PM Ach.%',fmtPct(avg(a,'PM Ach.%')))}${card('AM Sales',fmtMoney(sum(a,'AM Sales Value')))}${card('PM Sales',fmtMoney(sum(a,'PM Sales Value')))}${card('AM Coverage',fmtPct(avg(a,'AM Coverage')))}${card('PM Coverage',fmtPct(avg(a,'PM Coverage')))}${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
  <div class="two"><div class="panel"><h3>AM vs PM Achievement</h3><div id="p4bar" class="smallplot"></div></div><div class="panel"><h3>AM/PM Execution Classification</h3><div id="p4class" class="smallplot"></div></div></div>
  <div class="panel"><h3>AM / PM KPI Comparison</h3><div id="p4radar" class="plot"></div></div>`;
  plot('p4bar',[{x:['AM','PM'],y:[avg(a,'AM Ach.%')*100,avg(a,'PM Ach.%')*100],type:'bar',text:[fmtPct(avg(a,'AM Ach.%')),fmtPct(avg(a,'PM Ach.%'))],textposition:'auto'}],{yaxis:{title:'Achievement %'}});
@@ -700,7 +700,7 @@ function page7(a,b){
 }
 
 function page8(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Total Coaching Halves',fmtN(avg(a,'Total Coaching Halves')))}${card('Avg Check Halves',fmtN(avg(a,'Total Check Halves')))}${card('Avg Single Halves',fmtN(avg(a,'Total Single Halves')))}${card('Low Coaching DMs',count(a,r=>((r['Total Coaching Halves']||0)+(r['Total Single Halves']||0))<CONFIG.gapMinCoachingHalves))}${card('Avg Achievement',fmtPct(avg(a,'Total Ach.%')))}${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Total Coaching Halves',fmtN(avg(a,'Total Coaching Halves')))}${card('Avg Check Halves',fmtN(avg(a,'Total Check Halves')))}${card('Avg Single Halves',fmtN(avg(a,'Total Single Halves')))}${card('Low Coaching DMs',count(a,r=>((r['Total Coaching Halves']||0)+(r['Total Single Halves']||0))<CONFIG.gapMinCoachingHalves))}${card('Avg Achievement',fmtPct(avg(a,'Total Ach.%')))}${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
  <div class="two"><div class="panel"><h3>Coaching vs Achievement</h3><div id="p8sc" class="plot"></div></div><div class="panel"><h3>Coaching by Team</h3><div id="p8team" class="smallplot"></div></div></div>
  <div class="panel"><div class="insight">Interpretation rule: this page shows association only. It does not claim coaching activity causes higher achievement.<br><b>"Low Coaching DMs" standard:</b> a DM is counted here if their <b>Total Coaching Halves</b> (Single + Coaching Halves combined) is <b>below ${fmtN(CONFIG.gapMinCoachingHalves)}</b> — the Minimum Coaching Halves threshold set in Setup → Gap Detection Thresholds. Change that threshold in Setup to adjust this count everywhere it's used (this card and the "Low coaching activity" gap flag).</div></div>`;
  let cls=['Critical Low Performer','Low Performer','Needs Improvement','Stable / Average','Good Performer','High Performer'];
@@ -732,7 +732,7 @@ function page9(a,b){
 }
 
 function page10(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Performance Score',fmtN(avg(a,'Performance Score')))}${card('Top Score',fmtN(Math.max(...a.map(r=>r['Performance Score']||0))))}${card('Score <50',count(a,r=>(r['Performance Score']||0)<50))}${card('High Potential',count(a,r=>r.Potential==='High Potential'))}${card('Avg Data Completeness',fmtPct(avg(a,'Score Data Completeness')))}${card('Avg Progress (Q2 vs Q1)',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Performance Score',fmtN(avg(a,'Performance Score')))}${card('Top Score',fmtN(Math.max(...a.map(r=>r['Performance Score']||0))))}${card('Score <50',count(a,r=>(r['Performance Score']||0)<50))}${card('High Potential',count(a,r=>r.Potential==='High Potential'))}${card('Avg Data Completeness',fmtPct(avg(a,'Score Data Completeness')))}${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
  <div class="two"><div class="panel"><h3>Score Distribution</h3><div id="p10hist" class="smallplot"></div></div><div class="panel"><h3>Top / Bottom Score</h3><div id="p10table"></div></div></div>
  <div class="panel"><h3>Scoring Methodology</h3><div class="insight">Commercial ${(CONFIG.wCommercial*100).toFixed(0)}% (Total/AM/PM achievement, each capped at 150%); Activity ${(CONFIG.wActivity*100).toFixed(0)}% (AM/PM Call Rate); Coverage ${(CONFIG.wCoverage*100).toFixed(0)}% (AM/PM Coverage, AM PHD Coverage, PM Coverage Frequency, Served Coverage, GL Coverage); Customer Quality ${(CONFIG.wCustomer*100).toFixed(0)}% (Class A, inverse Class C, master-file ratio); Productivity ${(CONFIG.wProductivity*100).toFixed(0)}% (ROI); Coaching Activity ${(CONFIG.wCoaching*100).toFixed(0)}% (Total/Check/Single Halves the DM performed with their team); Progress ${(CONFIG.wProgress*100).toFixed(0)}% (Q2 vs Q1 Achievement change). Missing KPIs are handled by re-normalizing the available dimension weights. Data Completeness shows the evidence coverage. The Top 10 list excludes Low/Critical DMs because they are intervention cases, even if another dimension is strong.</div></div>`;
  plot('p10hist',[{x:a.map(r=>r['Performance Score']),type:'histogram',nbinsx:20}],{xaxis:{title:'Performance Score'},yaxis:{title:'DMs'}});
@@ -786,7 +786,7 @@ function page13(a,b){
    <tr><td style="padding:6px 8px">Customer Quality</td><td><input id="cfgWCustomer" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
    <tr><td style="padding:6px 8px">Productivity</td><td><input id="cfgWProductivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
    <tr><td style="padding:6px 8px">Coaching Activity</td><td><input id="cfgWCoaching" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Progress (Q2 vs Q1)</td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px">Progress</td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
   </table>
   <div id="cfgWeightSum" class="hint" style="margin-top:6px"></div>
  </div>
