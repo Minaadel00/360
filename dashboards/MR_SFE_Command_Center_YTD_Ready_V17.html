@@ -64,13 +64,16 @@ const fmtPct=x=>{const n=num(x);return n==null?'—':(n*100).toFixed(1)+'%'};
 const fmtN=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:1})};
 const fmtMoney=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:0})};
 /* Robust MR Performance Model: missing KPIs never make the score NaN. */
-/* CONFIG holds the editable Classification thresholds and Score weights.
+/* CONFIG holds editable Classification, Score-weight and Gap-detection thresholds.
    The Setup page reads/writes this object; model() always reads the latest values. */
 const DEFAULT_CONFIG = {
  classCritical:0.695, classLow:0.795, classNeeds:0.895, classStable:0.995, classGood:1.095,
  wCommercial:0.60, wActivity:0.10, wCoverage:0.05, wCustomer:0.05, wProductivity:0.05, wDevelopment:0.05, wProgress:0.10,
  priorityP1Ach:0.695, priorityP1MinGaps:1, priorityP2Ach:0.795,
- potentialMinAch:0.795, potentialMaxAch:0.995
+ potentialMinAch:0.795, potentialMaxAch:0.995,
+ gapWorkingHoursMin:7, gapPmCallRateMin:0.95, gapAmExecutionMin:0.90,
+ gapPmExecutionMin:0.90, gapFrequencyMin:0.80, gapClassAMin:0.25,
+ gapClassCMax:0.10, gapROIMin:0.09, gapMasterFileMin:0
 };
 let CONFIG = Object.assign({}, DEFAULT_CONFIG);
 function v(field,r){return num(r[field])}
@@ -156,7 +159,7 @@ function buildShell(){
  document.getElementById('nav').innerHTML=pages.map((p,i)=>`<button id="n${p[0]}" onclick="showPage('${p[0]}')">${i+1}. ${p[1]}</button>`).join('');
  pages.forEach(p=>document.getElementById('main').innerHTML+=`<section class="page" id="${p[0]}"><h2>${p[1]}</h2><div id="${p[0]}body"></div></section>`);
 }
-function showPage(id){pages.forEach(p=>{document.getElementById(p[0]).classList.toggle('active',p[0]===id);document.getElementById('n'+p[0]).classList.toggle('active',p[0]===id)});renderPage(id)}
+function showPage(id){pages.forEach(p=>{document.getElementById(p[0]).classList.toggle('active',p[0]===id);document.getElementById('n'+p[0]).classList.toggle('active',p[0]===id)});if(!DATA.length&&id!=='p13')renderAll();else renderPage(id)}
 
 /* ================= MONTHLY EXCEL LOADER =================
    Management workflow:
@@ -265,25 +268,21 @@ function diagnoseMonthlyRows(rows){
    const ach=num(r['Total Ach.%']);
    const am=num(r['AM Ach.%']), pm=num(r['PM Ach.%']);
    const hours=num(r['Total Working Hours']);
-   const aCall=num(r['AM Call Rate']), pCall=num(r['PM Call Rate']);
-   const aCov=num(r['AM Coverage']), pCov=num(r['PM Coverage']);
+   const pCall=num(r['PM Call Rate']);
    const freq=num(r['PM Coverage by Frequency']);
    const aClass=num(r['Class A%']), cClass=num(r['Class C%']);
    const roi=num(r['ROI of Served Customers']);
    const masterGap=num(r['Master File Gap']);
 
-   if(hours!=null && hours<7) gaps.push('Low working hours');
-   if(aCall!=null && aCall<0.9) gaps.push('Low AM call rate');
-   if(pCall!=null && pCall<0.9) gaps.push('Low PM call rate');
-   if(am!=null && am<0.9) gaps.push('Weak AM execution');
-   if(pm!=null && pm<0.9) gaps.push('Weak PM execution');
-   if(aCov!=null && aCov<0.9) gaps.push('Low AM coverage');
-   if(pCov!=null && pCov<0.9) gaps.push('Low PM coverage');
-   if(freq!=null && (freq<0.95 || freq>1.05)) gaps.push('Frequency coverage gap');
-   if(aClass!=null && aClass<0.25) gaps.push('Low Class A%');
-   if(cClass!=null && cClass>0.10) gaps.push('High Class C%');
-   if(masterGap!=null && masterGap>0) gaps.push('Master file gap');
-   if(roi!=null && roi<1) gaps.push('Low ROI');
+   if(hours!=null && hours<CONFIG.gapWorkingHoursMin) gaps.push('Low working hours');
+   if(pCall!=null && pCall<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
+   if(am!=null && am<CONFIG.gapAmExecutionMin) gaps.push('Weak AM execution');
+   if(pm!=null && pm<CONFIG.gapPmExecutionMin) gaps.push('Weak PM execution');
+   if(freq!=null && freq<CONFIG.gapFrequencyMin) gaps.push('Frequency coverage gap');
+   if(aClass!=null && aClass<CONFIG.gapClassAMin) gaps.push('Low Class A%');
+   if(cClass!=null && cClass>CONFIG.gapClassCMax) gaps.push('High Class C%');
+   if(masterGap!=null && masterGap>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
+   if(roi!=null && roi<CONFIG.gapROIMin) gaps.push('Low ROI');
 
    r['KPI Gaps']=gaps.length;
    r['Main Gap']=gaps[0]||'No major gap';
@@ -300,12 +299,9 @@ function diagnoseMonthlyRows(rows){
 
    const actions={
      'Low working hours':'Review daily working plan and field-time utilization.',
-     'Low AM call rate':'Review AM call plan and account routing.',
      'Low PM call rate':'Review PM call plan and doctor routing.',
      'Weak AM execution':'Joint AM field visit; review AM execution and conversion.',
      'Weak PM execution':'Joint PM field visit; review frequency, customer mix and conversion.',
-     'Low AM coverage':'Improve AM account coverage against the planned customer universe.',
-     'Low PM coverage':'Improve PM customer coverage and territory routing.',
      'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
      'Low Class A%':'Review customer mix and increase high-value customer coverage.',
      'High Class C%':'Reduce low-value customer dependency and improve customer mix.',
@@ -370,18 +366,20 @@ async function loadMonthlyExcel(input){
 
 
 function renderAll(){
- if(!DATA.length){
-   const b=document.getElementById('content');
+ let active=pages.find(p=>document.getElementById(p[0]).classList.contains('active'))?.[0]||'p1';
+ if(!DATA.length && active!=='p13'){
+   const b=document.getElementById(active+'body');
    if(b){
      b.innerHTML=`<div class="panel" style="padding:40px;text-align:center">
-       <h2 style="margin:0 0 10px">MR SFE Command Center</h2>
+       <h2 style="margin:0 0 10px">MR Effective Command Center</h2>
        <div style="color:#667085">No YTD data loaded yet.</div>
        <div style="margin-top:8px;color:#667085;font-size:13px">Use <b>Load Monthly Excel</b> above to upload the latest YTD file.</div>
      </div>`;
    }
    return;
  }
-let active=pages.find(p=>document.getElementById(p[0]).classList.contains('active'))?.[0]||'p1';renderPage(active)}
+ renderPage(active)
+}
 function renderPage(id){
  const a=filtered(), body=document.getElementById(id+'body'); body.innerHTML='';
  if(id==='p1') return page1(a,body); if(id==='p2') return page2(a,body); if(id==='p3') return page3(a,body); if(id==='p4') return page4(a,body);
@@ -675,16 +673,15 @@ function page3(a,b){
    // Fallback diagnosis for uploaded YTD files where model fields are unavailable.
    if(!mainGap || mainGap==='No major gap'){
      const gaps=[];
-     if(num(r['Total Working Hours'])!=null && num(r['Total Working Hours'])<7) gaps.push('Low working hours');
-     if(num(r['AM Call Rate'])!=null && num(r['AM Call Rate'])<0.9) gaps.push('Low AM call rate');
-     if(num(r['PM Call Rate'])!=null && num(r['PM Call Rate'])<0.9) gaps.push('Low PM call rate');
-     if(num(r['AM Coverage'])!=null && num(r['AM Coverage'])<0.9) gaps.push('Low AM coverage');
-     if(num(r['PM Coverage'])!=null && num(r['PM Coverage'])<0.9) gaps.push('Low PM coverage');
-     if(num(r['PM Coverage by Frequency'])!=null && num(r['PM Coverage by Frequency'])<0.95) gaps.push('Frequency coverage gap');
-     if(num(r['Class A%'])!=null && num(r['Class A%'])<0.25) gaps.push('Low Class A%');
-     if(num(r['Class C%'])!=null && num(r['Class C%'])>0.10) gaps.push('High Class C%');
-     if(num(r['ROI of Served Customers'])!=null && num(r['ROI of Served Customers'])<1) gaps.push('Low ROI');
-     if(num(r['Standard Master File'])!=null && num(r['Actual Master File'])!=null && num(r['Actual Master File'])<num(r['Standard Master File'])) gaps.push('Master file gap');
+     if(num(r['Total Working Hours'])!=null && num(r['Total Working Hours'])<CONFIG.gapWorkingHoursMin) gaps.push('Low working hours');
+     if(num(r['PM Call Rate'])!=null && num(r['PM Call Rate'])<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
+     if(num(r['AM Ach.%'])!=null && num(r['AM Ach.%'])<CONFIG.gapAmExecutionMin) gaps.push('Weak AM execution');
+     if(num(r['PM Ach.%'])!=null && num(r['PM Ach.%'])<CONFIG.gapPmExecutionMin) gaps.push('Weak PM execution');
+     if(num(r['PM Coverage by Frequency'])!=null && num(r['PM Coverage by Frequency'])<CONFIG.gapFrequencyMin) gaps.push('Frequency coverage gap');
+     if(num(r['Class A%'])!=null && num(r['Class A%'])<CONFIG.gapClassAMin) gaps.push('Low Class A%');
+     if(num(r['Class C%'])!=null && num(r['Class C%'])>CONFIG.gapClassCMax) gaps.push('High Class C%');
+     if(num(r['ROI of Served Customers'])!=null && num(r['ROI of Served Customers'])<CONFIG.gapROIMin) gaps.push('Low ROI');
+     if(num(r['Standard Master File'])!=null && num(r['Actual Master File'])!=null && num(r['Standard Master File'])-num(r['Actual Master File'])>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
      mainGap=gaps[0]||'Insufficient data to confirm root cause.';
    }
 
@@ -700,10 +697,7 @@ function page3(a,b){
    if(!action || action==='Monitor KPI trend and validate root cause with DM before intervention.'){
      const actions={
        'Low working hours':'Review daily working plan and field-time utilization.',
-       'Low AM call rate':'Review AM call plan and account routing.',
        'Low PM call rate':'Review PM call plan and doctor routing.',
-       'Low AM coverage':'Improve AM account coverage against the planned customer universe.',
-       'Low PM coverage':'Improve PM customer coverage and territory routing.',
        'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
        'Low Class A%':'Review customer mix and increase high-value customer coverage.',
        'High Class C%':'Reduce low-value customer dependency and improve customer mix.',
@@ -905,6 +899,21 @@ function page13(a,b){
   </table>
  </div>
  <div class="panel">
+  <h3>Gap Detection Thresholds</h3>
+  <div class="insight">Edit these thresholds to control which MR KPIs are flagged as gaps. AM Call Rate is not used as a gap.</div>
+  <table style="width:100%;font-size:12px;margin-top:8px;max-width:560px">
+   <tr><td style="padding:6px 8px">Low Working Hours — below</td><td><input id="cfgGapHours" type="number" step="0.1" style="width:90px"> hours</td></tr>
+   <tr><td style="padding:6px 8px">Low PM Call Rate — below</td><td><input id="cfgGapPmCall" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Weak AM Execution — below</td><td><input id="cfgGapAmExec" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Weak PM Execution — below</td><td><input id="cfgGapPmExec" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Frequency Coverage — below</td><td><input id="cfgGapFrequency" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Low Class A% — below</td><td><input id="cfgGapClassA" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">High Class C% — above</td><td><input id="cfgGapClassC" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Low ROI — below</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Master File Gap — if difference is above</td><td><input id="cfgGapMasterFile" type="number" step="1" style="width:90px"></td></tr>
+  </table>
+ </div>
+ <div class="panel">
   <button onclick="saveConfig()">Save &amp; Recalculate</button>
   <button onclick="resetConfigDefaults()" style="background:#667085;margin-left:8px">Reset to Defaults</button>
   <div id="cfgStatus" style="margin-top:8px;font-size:12px"></div>
@@ -929,6 +938,15 @@ function fillConfigForm(){
  document.getElementById('cfgP2Ach').value=(CONFIG.priorityP2Ach*100).toFixed(1);
  document.getElementById('cfgPotMin').value=(CONFIG.potentialMinAch*100).toFixed(1);
  document.getElementById('cfgPotMax').value=(CONFIG.potentialMaxAch*100).toFixed(1);
+ document.getElementById('cfgGapHours').value=CONFIG.gapWorkingHoursMin;
+ document.getElementById('cfgGapPmCall').value=(CONFIG.gapPmCallRateMin*100).toFixed(1);
+ document.getElementById('cfgGapAmExec').value=(CONFIG.gapAmExecutionMin*100).toFixed(1);
+ document.getElementById('cfgGapPmExec').value=(CONFIG.gapPmExecutionMin*100).toFixed(1);
+ document.getElementById('cfgGapFrequency').value=(CONFIG.gapFrequencyMin*100).toFixed(1);
+ document.getElementById('cfgGapClassA').value=(CONFIG.gapClassAMin*100).toFixed(1);
+ document.getElementById('cfgGapClassC').value=(CONFIG.gapClassCMax*100).toFixed(1);
+ document.getElementById('cfgGapROI').value=(CONFIG.gapROIMin*100).toFixed(1);
+ document.getElementById('cfgGapMasterFile').value=CONFIG.gapMasterFileMin;
  updateWeightSumHint();
 }
 function updateWeightSumHint(){
@@ -963,15 +981,29 @@ function saveConfig(){
   if([p1Ach,p2Ach,potMin,potMax].some(x=>!Number.isFinite(x))||!Number.isFinite(p1Gaps)||p1Gaps<0){ alert('Please enter valid numbers for the Priority and Potential thresholds.'); return; }
   if(!(p1Ach<p2Ach)){ alert('P1 threshold must be lower than the P2 threshold.'); return; }
   if(!(potMin<potMax)){ alert('Potential "from" must be lower than "up to".'); return; }
+  const gapWorkingHoursMin=Number(document.getElementById('cfgGapHours').value);
+  const gapPmCallRateMin=Number(document.getElementById('cfgGapPmCall').value)/100;
+  const gapAmExecutionMin=Number(document.getElementById('cfgGapAmExec').value)/100;
+  const gapPmExecutionMin=Number(document.getElementById('cfgGapPmExec').value)/100;
+  const gapFrequencyMin=Number(document.getElementById('cfgGapFrequency').value)/100;
+  const gapClassAMin=Number(document.getElementById('cfgGapClassA').value)/100;
+  const gapClassCMax=Number(document.getElementById('cfgGapClassC').value)/100;
+  const gapROIMin=Number(document.getElementById('cfgGapROI').value)/100;
+  const gapMasterFileMin=Number(document.getElementById('cfgGapMasterFile').value);
+  if([gapWorkingHoursMin,gapPmCallRateMin,gapAmExecutionMin,gapPmExecutionMin,gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all Gap Detection thresholds.'); return; }
   CONFIG.classCritical=critical; CONFIG.classLow=low; CONFIG.classNeeds=needs; CONFIG.classStable=stable; CONFIG.classGood=good;
   CONFIG.wCommercial=wC; CONFIG.wActivity=wA; CONFIG.wCoverage=wCov; CONFIG.wCustomer=wCu; CONFIG.wProductivity=wP; CONFIG.wDevelopment=wD; CONFIG.wProgress=wPr;
   CONFIG.priorityP1Ach=p1Ach; CONFIG.priorityP1MinGaps=p1Gaps; CONFIG.priorityP2Ach=p2Ach;
   CONFIG.potentialMinAch=potMin; CONFIG.potentialMaxAch=potMax;
+  CONFIG.gapWorkingHoursMin=gapWorkingHoursMin; CONFIG.gapPmCallRateMin=gapPmCallRateMin;
+  CONFIG.gapAmExecutionMin=gapAmExecutionMin; CONFIG.gapPmExecutionMin=gapPmExecutionMin;
+  CONFIG.gapFrequencyMin=gapFrequencyMin; CONFIG.gapClassAMin=gapClassAMin;
+  CONFIG.gapClassCMax=gapClassCMax; CONFIG.gapROIMin=gapROIMin; CONFIG.gapMasterFileMin=gapMasterFileMin;
   model();
   diagnoseMonthlyRows(DATA);
   renderAll();
   const status=document.getElementById('cfgStatus');
-  if(status){ status.style.color='#16a34a'; status.textContent='Saved. Classification, Score, Priority and Potential recalculated across the whole dashboard.'; }
+  if(status){ status.style.color='#16a34a'; status.textContent='Saved. Classification, Score, Priority, Potential and Gap Detection recalculated across the whole dashboard.'; }
  }catch(err){ console.error(err); alert('Could not save settings.\n\n'+err.message); }
 }
 function resetConfigDefaults(){
@@ -989,12 +1021,9 @@ function page14(a,b){
  // and on the Low Performer Command Center / Action Plan pages — kept local so nothing existing is touched.
  const actions={
    'Low working hours':'Review daily working plan and field-time utilization.',
-   'Low AM call rate':'Review AM call plan and account routing.',
    'Low PM call rate':'Review PM call plan and doctor routing.',
    'Weak AM execution':'Joint AM field visit; review AM execution and conversion.',
    'Weak PM execution':'Joint PM field visit; review frequency, customer mix and conversion.',
-   'Low AM coverage':'Improve AM account coverage against the planned customer universe.',
-   'Low PM coverage':'Improve PM customer coverage and territory routing.',
    'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
    'Low Class A%':'Review customer mix and increase high-value customer coverage.',
    'High Class C%':'Reduce low-value customer dependency and improve customer mix.',
