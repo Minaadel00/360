@@ -282,7 +282,7 @@ function diagnoseMonthlyRows(rows){
    if(aClass!=null && aClass<CONFIG.gapClassAMin) gaps.push('Low Class A%');
    if(cClass!=null && cClass>CONFIG.gapClassCMax) gaps.push('High Class C%');
    if(masterGap!=null && masterGap>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
-   if(roi!=null && roi<CONFIG.gapROIMin) gaps.push('Low ROI');
+   if(roi!=null && roi>CONFIG.gapROIMin) gaps.push('Low ROI');
 
    r['KPI Gaps']=gaps.length;
    r['Main Gap']=gaps[0]||'No major gap';
@@ -680,7 +680,7 @@ function page3(a,b){
      if(num(r['PM Coverage by Frequency'])!=null && num(r['PM Coverage by Frequency'])<CONFIG.gapFrequencyMin) gaps.push('Frequency coverage gap');
      if(num(r['Class A%'])!=null && num(r['Class A%'])<CONFIG.gapClassAMin) gaps.push('Low Class A%');
      if(num(r['Class C%'])!=null && num(r['Class C%'])>CONFIG.gapClassCMax) gaps.push('High Class C%');
-     if(num(r['ROI of Served Customers'])!=null && num(r['ROI of Served Customers'])<CONFIG.gapROIMin) gaps.push('Low ROI');
+     if(num(r['ROI of Served Customers'])!=null && num(r['ROI of Served Customers'])>CONFIG.gapROIMin) gaps.push('Low ROI');
      if(num(r['Standard Master File'])!=null && num(r['Actual Master File'])!=null && num(r['Standard Master File'])-num(r['Actual Master File'])>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
      mainGap=gaps[0]||'Insufficient data to confirm root cause.';
    }
@@ -909,7 +909,7 @@ function page13(a,b){
    <tr><td style="padding:6px 8px">Frequency Coverage — below</td><td><input id="cfgGapFrequency" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Low Class A% — below</td><td><input id="cfgGapClassA" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">High Class C% — above</td><td><input id="cfgGapClassC" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">Low ROI — below</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Low ROI — above</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Master File Gap — if difference is above</td><td><input id="cfgGapMasterFile" type="number" step="1" style="width:90px"></td></tr>
   </table>
  </div>
