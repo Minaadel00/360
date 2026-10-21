@@ -72,8 +72,9 @@ const DEFAULT_CONFIG = {
  wCommercial:0.60, wActivity:0.10, wCoverage:0.05, wCustomer:0.05, wProductivity:0.05, wCoaching:0.05, wProgress:0.10,
  priorityP1Ach:0.695, priorityP1MinGaps:1, priorityP2Ach:0.795,
  potentialMinAch:0.795, potentialMaxAch:0.995,
- gapCallRateMin:0.90, gapCoverageMin:0.90, gapFreqMin:0.95, gapFreqMax:1.05,
- gapClassAMin:0.25, gapClassCMax:0.10, gapROIMin:1.00, gapMinCoachingHalves:132
+ gapPmCallRateMin:0.95, gapAmPhdCoverageMin:0.80,
+ gapGlCoverageMin:0.80, gapFreqMin:0.80,
+ gapClassAMin:0.25, gapClassCMax:0.10, gapROIThreshold:0.09, gapMinCoachingHalves:207
 };
 let CONFIG = Object.assign({}, DEFAULT_CONFIG);
 
@@ -270,26 +271,23 @@ function diagnoseMonthlyRows(rows){
  rows.forEach(r=>{
    const gaps=[];
    const ach=num(r['Total Ach.%']);
-   const aCall=num(r['AM Call Rate']), pCall=num(r['PM Call Rate']);
-   const aCov=num(r['AM Coverage']), aPhd=num(r['AM PHD Coverage']), pCov=num(r['PM Coverage']);
+   const pCall=num(r['PM Call Rate']);
+   const aPhd=num(r['AM PHD Coverage']);
    const freq=num(r['PM Coverage by Frequency']);
    const gl=num(r['GL Coverage']);
    const aClass=num(r['Class A%']), cClass=num(r['Class C%']);
    const roi=num(r['ROI of Served Customers']);
    const masterGap=num(r['Master File Gap']);
-   const coaching=(num(r['Total Coaching Halves'])||0)+(num(r['Total Single Halves'])||0);
+   const coaching=(num(r['Total Coaching Halves'])||0)+(num(r['Total Check Halves'])||0)+(num(r['Total Single Halves'])||0);
 
-   if(aCall!=null && aCall<CONFIG.gapCallRateMin) gaps.push('Low AM call rate');
-   if(pCall!=null && pCall<CONFIG.gapCallRateMin) gaps.push('Low PM call rate');
-   if(aCov!=null && aCov<CONFIG.gapCoverageMin) gaps.push('Low AM coverage');
-   if(aPhd!=null && aPhd<CONFIG.gapCoverageMin) gaps.push('Low AM PHD coverage');
-   if(pCov!=null && pCov<CONFIG.gapCoverageMin) gaps.push('Low PM coverage');
-   if(freq!=null && (freq<CONFIG.gapFreqMin || freq>CONFIG.gapFreqMax)) gaps.push('Frequency coverage gap');
-   if(gl!=null && gl<CONFIG.gapCoverageMin) gaps.push('Low GL coverage');
+   if(pCall!=null && pCall<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
+   if(aPhd!=null && aPhd<CONFIG.gapAmPhdCoverageMin) gaps.push('Low AM PHD coverage');
+   if(freq!=null && freq<CONFIG.gapFreqMin) gaps.push('Frequency coverage gap');
+   if(gl!=null && gl<CONFIG.gapGlCoverageMin) gaps.push('Low GL coverage');
    if(aClass!=null && aClass<CONFIG.gapClassAMin) gaps.push('Low Class A%');
    if(cClass!=null && cClass>CONFIG.gapClassCMax) gaps.push('High Class C%');
    if(masterGap!=null && masterGap>0) gaps.push('Master file gap');
-   if(roi!=null && roi<CONFIG.gapROIMin) gaps.push('Low ROI');
+   if(roi!=null && roi>CONFIG.gapROIThreshold) gaps.push('Low ROI');
    if(coaching!=null && coaching<CONFIG.gapMinCoachingHalves) gaps.push('Low coaching activity');
 
    r['KPI Gaps']=gaps.length;
@@ -304,11 +302,8 @@ function diagnoseMonthlyRows(rows){
    r['Potential']=(ach!=null && ach>=CONFIG.potentialMinAch && ach<CONFIG.potentialMaxAch && gaps.length>0)?'High Potential':'Normal';
 
    const actions={
-     'Low AM call rate':"Review the DM's own AM call plan and account routing.",
      'Low PM call rate':"Review the DM's own PM call plan and doctor routing.",
-     'Low AM coverage':'Improve AM account coverage against the planned customer universe.',
      'Low AM PHD coverage':'Review AM PHD/KOL account engagement and coverage plan.',
-     'Low PM coverage':'Improve PM customer coverage and territory routing.',
      'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
      'Low GL coverage':'Review GL account engagement and coverage plan.',
      'Low Class A%':'Review customer mix and increase high-value customer coverage.',
@@ -701,9 +696,9 @@ function page7(a,b){
 }
 
 function page8(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Total Coaching Halves',fmtN(avg(a,'Total Coaching Halves')))}${card('Avg Check Halves',fmtN(avg(a,'Total Check Halves')))}${card('Avg Single Halves',fmtN(avg(a,'Total Single Halves')))}${card('Low Coaching DMs',count(a,r=>((r['Total Coaching Halves']||0)+(r['Total Single Halves']||0))<CONFIG.gapMinCoachingHalves))}${card('Avg Achievement',fmtPct(avg(a,'Total Ach.%')))}${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Total Coaching Halves',fmtN(avg(a,'Total Coaching Halves')))}${card('Avg Check Halves',fmtN(avg(a,'Total Check Halves')))}${card('Avg Single Halves',fmtN(avg(a,'Total Single Halves')))}${card('Low Coaching DMs',count(a,r=>((num(r['Total Coaching Halves'])||0)+(num(r['Total Check Halves'])||0)+(num(r['Total Single Halves'])||0))<CONFIG.gapMinCoachingHalves))}${card('Avg Achievement',fmtPct(avg(a,'Total Ach.%')))}${card('Avg Progress',fmtPct(avg(a,'Q2 vs Q1 Progress')))}</div>
  <div class="two"><div class="panel"><h3>Coaching vs Achievement</h3><div id="p8sc" class="plot"></div></div><div class="panel"><h3>Coaching by Team</h3><div id="p8team" class="smallplot"></div></div></div>
- <div class="panel"><div class="insight">Interpretation rule: this page shows association only. It does not claim coaching activity causes higher achievement.<br><b>"Low Coaching DMs" standard:</b> a DM is counted here if their <b>Total Coaching Halves</b> (Single + Coaching Halves combined) is <b>below ${fmtN(CONFIG.gapMinCoachingHalves)}</b> — the Minimum Coaching Halves threshold set in Setup → Gap Detection Thresholds. Change that threshold in Setup to adjust this count everywhere it's used (this card and the "Low coaching activity" gap flag).</div></div>`;
+ <div class="panel"><div class="insight">Interpretation rule: this page shows association only. It does not claim coaching activity causes higher achievement.<br><b>"Low Coaching DMs" standard:</b> a DM is counted here if the sum of <b>Total Coaching Halves + Total Check Halves + Total Single Halves</b> is <b>below ${fmtN(CONFIG.gapMinCoachingHalves)}</b> — the Minimum Coaching Halves threshold set in Setup → Gap Detection Thresholds. Change that threshold in Setup to adjust this count and the "Low coaching activity" gap flag.</div></div>`;
  let cls=['Critical Low Performer','Low Performer','Needs Improvement','Stable / Average','Good Performer','High Performer'];
  let traces=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>r['Total Coaching Halves']),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:c,text:x.map(r=>r['DM Name']),hovertemplate:'%{text}<br>Coaching=%{x:.1f}<br>Ach=%{y:.1f}%<extra></extra>'}});
  plot('p8sc',traces,{xaxis:{title:'Total Coaching Halves'},yaxis:{title:'Total Achievement %'}});
@@ -806,14 +801,15 @@ function page13(a,b){
  </div>
  <div class="panel">
   <h3>Gap Detection Thresholds</h3>
-  <div class="insight">These decide what counts as a KPI gap for a DM. The Minimum Coaching Halves default is a starting placeholder — adjust it to your organization's actual target.</div>
+  <div class="insight">These editable thresholds decide what counts as a KPI gap for a DM. Coaching activity is the sum of Total Coaching Halves, Total Check Halves and Total Single Halves.</div>
   <table style="width:100%;font-size:12px;margin-top:8px;max-width:560px">
-   <tr><td style="padding:6px 8px">Min AM/PM Call Rate</td><td><input id="cfgGapCall" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">Min Coverage (AM/PM/PHD/GL/Served)</td><td><input id="cfgGapCov" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">PM Coverage by Frequency band</td><td><input id="cfgGapFreqMin" type="number" step="0.1" style="width:80px"> % – <input id="cfgGapFreqMax" type="number" step="0.1" style="width:80px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Min PM Call Rate</td><td><input id="cfgGapPmCall" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Min AM PHD Coverage</td><td><input id="cfgGapAmPhdCov" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Min GL Coverage</td><td><input id="cfgGapGlCov" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Min PM Coverage by Frequency</td><td><input id="cfgGapFreqMin" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Min Class A%</td><td><input id="cfgGapClassA" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Max Class C%</td><td><input id="cfgGapClassC" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">Min ROI</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">ROI gap if above</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Min Coaching Halves</td><td><input id="cfgGapCoaching" type="number" step="0.5" style="width:90px"></td></tr>
   </table>
  </div>
@@ -842,13 +838,13 @@ function fillConfigForm(){
  document.getElementById('cfgP2Ach').value=(CONFIG.priorityP2Ach*100).toFixed(1);
  document.getElementById('cfgPotMin').value=(CONFIG.potentialMinAch*100).toFixed(1);
  document.getElementById('cfgPotMax').value=(CONFIG.potentialMaxAch*100).toFixed(1);
- document.getElementById('cfgGapCall').value=(CONFIG.gapCallRateMin*100).toFixed(1);
- document.getElementById('cfgGapCov').value=(CONFIG.gapCoverageMin*100).toFixed(1);
+ document.getElementById('cfgGapPmCall').value=(CONFIG.gapPmCallRateMin*100).toFixed(1);
+ document.getElementById('cfgGapAmPhdCov').value=(CONFIG.gapAmPhdCoverageMin*100).toFixed(1);
+ document.getElementById('cfgGapGlCov').value=(CONFIG.gapGlCoverageMin*100).toFixed(1);
  document.getElementById('cfgGapFreqMin').value=(CONFIG.gapFreqMin*100).toFixed(1);
- document.getElementById('cfgGapFreqMax').value=(CONFIG.gapFreqMax*100).toFixed(1);
  document.getElementById('cfgGapClassA').value=(CONFIG.gapClassAMin*100).toFixed(1);
  document.getElementById('cfgGapClassC').value=(CONFIG.gapClassCMax*100).toFixed(1);
- document.getElementById('cfgGapROI').value=(CONFIG.gapROIMin*100).toFixed(1);
+ document.getElementById('cfgGapROI').value=(CONFIG.gapROIThreshold*100).toFixed(1);
  document.getElementById('cfgGapCoaching').value=CONFIG.gapMinCoachingHalves;
  updateWeightSumHint();
 }
@@ -884,22 +880,23 @@ function saveConfig(){
   if([p1Ach,p2Ach,potMin,potMax].some(x=>!Number.isFinite(x))||!Number.isFinite(p1Gaps)||p1Gaps<0){ alert('Please enter valid numbers for the Priority and Potential thresholds.'); return; }
   if(!(p1Ach<p2Ach)){ alert('P1 threshold must be lower than the P2 threshold.'); return; }
   if(!(potMin<potMax)){ alert('Potential "from" must be lower than "up to".'); return; }
-  const gapCall=Number(document.getElementById('cfgGapCall').value)/100;
-  const gapCov=Number(document.getElementById('cfgGapCov').value)/100;
+  const gapPmCall=Number(document.getElementById('cfgGapPmCall').value)/100;
+  const gapAmPhdCov=Number(document.getElementById('cfgGapAmPhdCov').value)/100;
+  const gapGlCov=Number(document.getElementById('cfgGapGlCov').value)/100;
   const gapFreqMin=Number(document.getElementById('cfgGapFreqMin').value)/100;
-  const gapFreqMax=Number(document.getElementById('cfgGapFreqMax').value)/100;
   const gapClassA=Number(document.getElementById('cfgGapClassA').value)/100;
   const gapClassC=Number(document.getElementById('cfgGapClassC').value)/100;
-  const gapROI=Number(document.getElementById('cfgGapROI').value)/100;
+  const gapROIThreshold=Number(document.getElementById('cfgGapROI').value)/100;
   const gapCoaching=Number(document.getElementById('cfgGapCoaching').value);
-  if([gapCall,gapCov,gapFreqMin,gapFreqMax,gapClassA,gapClassC,gapROI].some(x=>!Number.isFinite(x))||!Number.isFinite(gapCoaching)){ alert('Please enter valid numbers for all Gap Detection thresholds.'); return; }
-  if(!(gapFreqMin<gapFreqMax)){ alert('Frequency band minimum must be lower than the maximum.'); return; }
+  if([gapPmCall,gapAmPhdCov,gapGlCov,gapFreqMin,gapClassA,gapClassC,gapROIThreshold].some(x=>!Number.isFinite(x))||!Number.isFinite(gapCoaching)){ alert('Please enter valid numbers for all Gap Detection thresholds.'); return; }
+  if(gapCoaching<0){ alert('Minimum Coaching Halves must be zero or higher.'); return; }
   CONFIG.classCritical=critical; CONFIG.classLow=low; CONFIG.classNeeds=needs; CONFIG.classStable=stable; CONFIG.classGood=good;
   CONFIG.wCommercial=wC; CONFIG.wActivity=wA; CONFIG.wCoverage=wCov; CONFIG.wCustomer=wCu; CONFIG.wProductivity=wP; CONFIG.wCoaching=wCoach; CONFIG.wProgress=wProg;
   CONFIG.priorityP1Ach=p1Ach; CONFIG.priorityP1MinGaps=p1Gaps; CONFIG.priorityP2Ach=p2Ach;
   CONFIG.potentialMinAch=potMin; CONFIG.potentialMaxAch=potMax;
-  CONFIG.gapCallRateMin=gapCall; CONFIG.gapCoverageMin=gapCov; CONFIG.gapFreqMin=gapFreqMin; CONFIG.gapFreqMax=gapFreqMax;
-  CONFIG.gapClassAMin=gapClassA; CONFIG.gapClassCMax=gapClassC; CONFIG.gapROIMin=gapROI; CONFIG.gapMinCoachingHalves=gapCoaching;
+  CONFIG.gapPmCallRateMin=gapPmCall; CONFIG.gapAmPhdCoverageMin=gapAmPhdCov;
+  CONFIG.gapGlCoverageMin=gapGlCov; CONFIG.gapFreqMin=gapFreqMin;
+  CONFIG.gapClassAMin=gapClassA; CONFIG.gapClassCMax=gapClassC; CONFIG.gapROIThreshold=gapROIThreshold; CONFIG.gapMinCoachingHalves=gapCoaching;
   model();
   diagnoseMonthlyRows(DATA);
   renderAll();
@@ -919,11 +916,8 @@ function resetConfigDefaults(){
 
 function page14(a,b){
  const actions={
-   'Low AM call rate':"Review the DM's own AM call plan and account routing.",
    'Low PM call rate':"Review the DM's own PM call plan and doctor routing.",
-   'Low AM coverage':'Improve AM account coverage against the planned customer universe.',
    'Low AM PHD coverage':'Review AM PHD/KOL account engagement and coverage plan.',
-   'Low PM coverage':'Improve PM customer coverage and territory routing.',
    'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
    'Low GL coverage':'Review GL account engagement and coverage plan.',
    'Low Class A%':'Review customer mix and increase high-value customer coverage.',
