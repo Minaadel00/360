@@ -192,6 +192,71 @@ function buildShell(){
 function showPage(id){pages.forEach(p=>{document.getElementById(p[0]).classList.toggle('active',p[0]===id);document.getElementById('n'+p[0]).classList.toggle('active',p[0]===id)});renderPage(id)}
 
 /* ================= MONTHLY EXCEL LOADER ================= */
+const UPLOAD_DB_NAME='360-dm-dashboard-upload';
+function openUploadDatabase(){
+ return new Promise((resolve,reject)=>{
+   if(typeof indexedDB==='undefined'){reject(new Error('This browser does not support local workbook storage.'));return}
+   const request=indexedDB.open(UPLOAD_DB_NAME,1);
+   request.onupgradeneeded=()=>request.result.createObjectStore('workbooks',{keyPath:'id'});
+   request.onsuccess=()=>resolve(request.result);
+   request.onerror=()=>reject(request.error||new Error('Could not open local workbook storage.'));
+   request.onblocked=()=>reject(new Error('Local workbook storage is blocked by another dashboard tab.'));
+ });
+}
+async function saveUploadedWorkbook(file){
+ const content=await file.arrayBuffer();
+ const db=await openUploadDatabase();
+ return new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(error)=>{
+     if(settled)return;
+     settled=true;
+     db.close();
+     if(error)reject(error);else resolve();
+   };
+   try{
+     const transaction=db.transaction('workbooks','readwrite');
+     transaction.objectStore('workbooks').put({
+       id:'latest',name:file.name,type:file.type,lastModified:file.lastModified,content
+     });
+     transaction.oncomplete=()=>finish();
+     transaction.onerror=()=>finish(transaction.error||new Error('Could not save the uploaded workbook.'));
+     transaction.onabort=()=>finish(transaction.error||new Error('Saving the uploaded workbook was aborted.'));
+   }catch(err){finish(err)}
+ });
+}
+async function readSavedWorkbook(){
+ const db=await openUploadDatabase();
+ return new Promise((resolve,reject)=>{
+   let settled=false;
+   const finish=(error,record)=>{
+     if(settled)return;
+     settled=true;
+     db.close();
+     if(error)reject(error);else resolve(record||null);
+   };
+   try{
+     const transaction=db.transaction('workbooks','readonly');
+     const request=transaction.objectStore('workbooks').get('latest');
+     transaction.oncomplete=()=>finish(null,request.result);
+     transaction.onerror=()=>finish(transaction.error||new Error('Could not read the saved workbook.'));
+     transaction.onabort=()=>finish(transaction.error||new Error('Reading the saved workbook was aborted.'));
+   }catch(err){finish(err)}
+ });
+}
+async function restoreSavedWorkbook(){
+ const status=document.getElementById('fileStatus');
+ try{
+   const record=await readSavedWorkbook();
+   if(!record)return;
+   const file=new File([record.content],record.name,{type:record.type,lastModified:record.lastModified});
+   await loadMonthlyExcel(null,file);
+ }catch(err){
+   console.error('Could not restore the saved DM workbook.',err);
+   status.textContent='Restore failed: '+err.message;
+   status.style.color='#dc2626';
+ }
+}
 const MONTHLY_NUMERIC_FIELDS=[
  'AM Call Rate','AM Coverage','AM PHD Coverage','AM Coaching Halves','AM Sales Value','AM FCT Value','AM Ach.%',
  'PM Call Rate','PM Coverage','PM Coverage by Frequency','PM Coaching Halves','Standard Master File','Actual Master File','Class A%','Class C%','PM Sales Value','PM FCT Value','PM Ach.%',
@@ -344,8 +409,8 @@ function diagnoseMonthlyRows(rows){
  });
 }
 
-async function loadMonthlyExcel(input){
- const file=input.files && input.files[0];
+async function loadMonthlyExcel(input,restoredFile=null){
+ const file=restoredFile||(input.files && input.files[0]);
  if(!file) return;
  const status=document.getElementById('fileStatus');
  status.textContent='Loading '+file.name+'…';
@@ -385,11 +450,20 @@ async function loadMonthlyExcel(input){
      `District Manager performance | ${DATA.length} records | Loaded: ${file.name} | Monthly management view`;
    status.textContent=`Loaded: ${file.name} • ${DATA.length} DMs`;
    status.style.color='#16a34a';
+   if(!restoredFile){
+     try{await saveUploadedWorkbook(file)}
+     catch(err){
+       console.error('Workbook loaded but could not be saved for refresh.',err);
+       status.textContent=`Loaded: ${file.name} • Could not save for refresh`;
+       status.style.color='#d97706';
+       status.title=err.message;
+     }
+   }
  }catch(err){
    console.error(err);
-   status.textContent='Load failed';
+   status.textContent=restoredFile?'Restore failed: '+err.message:'Load failed';
    status.style.color='#dc2626';
-   alert('Could not load the Excel file.\\n\\n'+err.message);
+   if(!restoredFile) alert('Could not load the Excel file.\\n\\n'+err.message);
  }
 }
 
@@ -1135,6 +1209,6 @@ async function exportToExcel(){
  }
 }
 
-buildShell(); updateFilterOptions(); showPage('p1'); renderAll();
+buildShell(); updateFilterOptions(); showPage('p1'); renderAll(); restoreSavedWorkbook();
 </script>
 </body></html>
