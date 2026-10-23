@@ -117,7 +117,24 @@ const DEFAULT_CONFIG = {
  gapPmExecutionMin:0.90, gapFrequencyMin:0.80, gapClassAMin:0.25,
  gapClassCMax:0.10, gapROIMin:0.09, gapMasterFileMin:0
 };
-let CONFIG = Object.assign({}, DEFAULT_CONFIG);
+const CONFIG_STORAGE_KEY='360-mr-dashboard-config';
+function loadSavedConfig(){
+ try{
+  const saved=localStorage.getItem(CONFIG_STORAGE_KEY);
+  if(!saved) return Object.assign({},DEFAULT_CONFIG);
+  const parsed=JSON.parse(saved);
+  if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)) throw new Error('Saved settings have an invalid format.');
+  const config=Object.assign({},DEFAULT_CONFIG);
+  Object.keys(DEFAULT_CONFIG).forEach(key=>{
+   if(typeof parsed[key]==='number'&&Number.isFinite(parsed[key])) config[key]=parsed[key];
+  });
+  return config;
+ }catch(err){
+  console.error('Could not restore saved MR setup settings.',err);
+  return Object.assign({},DEFAULT_CONFIG);
+ }
+}
+let CONFIG = loadSavedConfig();
 function v(field,r){return num(r[field])}
 function vals(field){return DATA.map(r=>num(r[field])).filter(x=>x!=null)}
 function pct(field,x,inverse=false){x=num(x);if(x==null)return null;let a=vals(field);if(!a.length)return null;let q=a.filter(z=>z<=x).length/a.length;return inverse?1-q:q}
@@ -1107,14 +1124,16 @@ function saveConfig(){
   const gapROIMin=Number(document.getElementById('cfgGapROI').value)/100;
   const gapMasterFileMin=Number(document.getElementById('cfgGapMasterFile').value);
   if([gapWorkingHoursMin,gapPmCallRateMin,gapAmExecutionMin,gapPmExecutionMin,gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all Gap Detection thresholds.'); return; }
-  CONFIG.classCritical=critical; CONFIG.classLow=low; CONFIG.classNeeds=needs; CONFIG.classStable=stable; CONFIG.classGood=good;
-  CONFIG.wCommercial=wC; CONFIG.wActivity=wA; CONFIG.wCoverage=wCov; CONFIG.wCustomer=wCu; CONFIG.wProductivity=wP; CONFIG.wDevelopment=wD; CONFIG.wProgress=wPr;
-  CONFIG.priorityP1Ach=p1Ach; CONFIG.priorityP1MinGaps=p1Gaps; CONFIG.priorityP2Ach=p2Ach;
-  CONFIG.potentialMinAch=potMin; CONFIG.potentialMaxAch=potMax;
-  CONFIG.gapWorkingHoursMin=gapWorkingHoursMin; CONFIG.gapPmCallRateMin=gapPmCallRateMin;
-  CONFIG.gapAmExecutionMin=gapAmExecutionMin; CONFIG.gapPmExecutionMin=gapPmExecutionMin;
-  CONFIG.gapFrequencyMin=gapFrequencyMin; CONFIG.gapClassAMin=gapClassAMin;
-  CONFIG.gapClassCMax=gapClassCMax; CONFIG.gapROIMin=gapROIMin; CONFIG.gapMasterFileMin=gapMasterFileMin;
+  const updatedConfig=Object.assign({},CONFIG,{
+   classCritical:critical,classLow:low,classNeeds:needs,classStable:stable,classGood:good,
+   wCommercial:wC,wActivity:wA,wCoverage:wCov,wCustomer:wCu,wProductivity:wP,wDevelopment:wD,wProgress:wPr,
+   priorityP1Ach:p1Ach,priorityP1MinGaps:p1Gaps,priorityP2Ach:p2Ach,
+   potentialMinAch:potMin,potentialMaxAch:potMax,
+   gapWorkingHoursMin,gapPmCallRateMin,gapAmExecutionMin,gapPmExecutionMin,
+   gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin
+  });
+  localStorage.setItem(CONFIG_STORAGE_KEY,JSON.stringify(updatedConfig));
+  CONFIG=updatedConfig;
   model();
   diagnoseMonthlyRows(DATA);
   renderAll();
@@ -1123,6 +1142,8 @@ function saveConfig(){
  }catch(err){ console.error(err); alert('Could not save settings.\n\n'+err.message); }
 }
 function resetConfigDefaults(){
+ try{localStorage.removeItem(CONFIG_STORAGE_KEY);}
+ catch(err){console.error('Could not clear saved MR setup settings.',err);alert('Could not reset settings.\n\n'+err.message);return;}
  CONFIG=Object.assign({},DEFAULT_CONFIG);
  fillConfigForm();
  model();
