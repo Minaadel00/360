@@ -47,6 +47,12 @@ header,.toolbar,.nav,main,.page,.grid,.two,.three,.panel{min-width:0}
  .plot{height:300px}
  .smallplot{height:260px}
  table{min-width:640px}
+ #p13 table{table-layout:auto;min-width:0}
+ #p13 table tr{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:0 8px;padding:3px 0}
+ #p13 table td{min-width:0;padding:5px 0;overflow-wrap:anywhere}
+ #p13 table td:empty{display:none}
+ #p13 input[type=number]{width:80px!important;max-width:100%}
+ #p13 .panel>button{margin:0 8px 8px 0}
 }
 @media(max-width:380px){
  .toolbar select{flex-basis:100%}
