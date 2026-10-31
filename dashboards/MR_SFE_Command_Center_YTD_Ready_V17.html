@@ -18,7 +18,7 @@ button{padding:8px 12px;border:0;border-radius:7px;background:var(--navy);color:
 .nav button{background:#eef2f7;color:#344054;white-space:nowrap}.nav button.active{background:var(--blue);color:#fff}
 main{padding:16px 18px}.page{display:none}.page.active{display:block}
 .grid{display:grid;grid-template-columns:repeat(5,minmax(160px,1fr));gap:10px}.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:13px;box-shadow:0 1px 2px #00000008}.label{font-size:11px;color:var(--muted)}.value{font-size:22px;font-weight:700;margin-top:5px}.hint{font-size:10px;color:var(--muted);margin-top:4px}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}.panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:12px}.panel h3{font-size:14px;margin:4px 5px 8px}.plot{height:360px}.smallplot{height:300px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}.panel{background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:12px}.panel h3{font-size:14px;margin:4px 5px 8px}.plot{height:360px}.smallplot{height:300px}.p4-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.p4-metric{border:1px solid var(--border);border-radius:8px;padding:8px 10px}.p4-metric h4{font-size:12px;margin:2px 3px 8px}.p4-metric-values{display:flex;justify-content:space-between;font-size:12px;font-weight:600;padding:0 4px}.p4-metric-chart{height:145px}
 table{width:100%;border-collapse:collapse;font-size:11px}th,td{padding:7px 6px;border-bottom:1px solid #edf0f4;text-align:left}th{background:#f8fafc;position:sticky;top:0;z-index:2}.scroll{max-height:430px;overflow:auto}
 .badge{padding:3px 7px;border-radius:999px;font-size:10px;font-weight:600}.p1{background:#fee2e2;color:#991b1b}.p2{background:#ffedd5;color:#9a3412}.p3{background:#fef3c7;color:#92400e}.p4{background:#dcfce7;color:#166534}
 .insight{padding:9px 11px;background:#f8fafc;border-left:3px solid var(--blue);margin:6px 0;border-radius:4px;font-size:12px}
@@ -105,16 +105,17 @@ const esc=(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 const fmtPct=x=>{const n=num(x);return n==null?'—':(n*100).toFixed(1)+'%'};
 const fmtN=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:1})};
 const fmtMoney=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:0})};
+function gapDetailsTitle(r){const gaps=Array.isArray(r.__kpiGapDetails)?r.__kpiGapDetails:[];return gaps.length?gaps.join('\n'):'No identified KPI gaps';}
+function fmtGapCount(value,r){return `<span title="${esc(gapDetailsTitle(r))}">${fmtN(value)}</span>`;}
 /* Robust MR Performance Model: missing KPIs never make the score NaN. */
 /* CONFIG holds editable Classification, Score-weight and Gap-detection thresholds.
    The Setup page reads/writes this object; model() always reads the latest values. */
 const DEFAULT_CONFIG = {
  classCritical:0.695, classLow:0.795, classNeeds:0.895, classStable:0.995, classGood:1.095,
- wCommercial:0.60, wActivity:0.10, wCoverage:0.05, wCustomer:0.05, wProductivity:0.05, wDevelopment:0.05, wProgress:0.10,
+ wTotalAch:0.60, wActivity:0.10, wCoverage:0.05, wCustomer:0.05, wProductivity:0.05, wProgress:0.10, wPerformanceItem:0.05,
  priorityP1Ach:0.695, priorityP1MinGaps:1, priorityP2Ach:0.795,
  potentialMinAch:0.795, potentialMaxAch:0.995,
- gapWorkingHoursMin:7, gapPmCallRateMin:0.95, gapAmExecutionMin:0.90,
- gapPmExecutionMin:0.90, gapFrequencyMin:0.80, gapClassAMin:0.25,
+ gapWorkingHoursMin:7, gapPmCallRateMin:0.95, gapPmCoverageMin:0.90, gapFrequencyMin:0.80, gapClassAMin:0.25,
  gapClassCMax:0.10, gapROIMin:0.09, gapMasterFileMin:0
 };
 const CONFIG_STORAGE_KEY='360-mr-dashboard-config';
@@ -128,6 +129,7 @@ function loadSavedConfig(){
   Object.keys(DEFAULT_CONFIG).forEach(key=>{
    if(typeof parsed[key]==='number'&&Number.isFinite(parsed[key])) config[key]=parsed[key];
   });
+  if(typeof parsed.wTotalAch!=='number'&&typeof parsed.wCommercial==='number'&&Number.isFinite(parsed.wCommercial)) config.wTotalAch=parsed.wCommercial;
   return config;
  }catch(err){
   console.error('Could not restore saved MR setup settings.',err);
@@ -142,17 +144,17 @@ function avgA(a){a=a.map(num).filter(x=>x!=null);return a.length?a.reduce((s,x)=
 const ratioVals=DATA.map(r=>{let s=num(r['Standard Master File']),a=num(r['Actual Master File']);return s!=null&&s>0&&a!=null?a/s:null}).filter(x=>x!=null);
 function ratioPct(x){x=num(x);if(x==null||!ratioVals.length)return null;return ratioVals.filter(z=>z<=x).length/ratioVals.length}
 function model(){
- const W={commercial:CONFIG.wCommercial,activity:CONFIG.wActivity,coverage:CONFIG.wCoverage,customer:CONFIG.wCustomer,productivity:CONFIG.wProductivity,development:CONFIG.wDevelopment,progress:CONFIG.wProgress};
+ const W={totalAch:CONFIG.wTotalAch,activity:CONFIG.wActivity,coverage:CONFIG.wCoverage,customer:CONFIG.wCustomer,productivity:CONFIG.wProductivity,progress:CONFIG.wProgress,performanceItem:CONFIG.wPerformanceItem};
  DATA.forEach(r=>{
- let commercial=avgA(['Total Ach.%','AM Ach.%','PM Ach.%'].map(k=>v(k,r))); commercial=commercial==null?null:Math.min(commercial,1.5)/1.5*100;
+ let totalAch=avgA(['Total Ach.%','AM Ach.%','PM Ach.%'].map(k=>v(k,r))); totalAch=totalAch==null?null:Math.min(totalAch,1.5)/1.5*100;
  let activity=avgA([pct('Total Working Hours',v('Total Working Hours',r)),pct('AM Call Rate',v('AM Call Rate',r)),pct('PM Call Rate',v('PM Call Rate',r))]); activity=activity==null?null:activity*100;
  let coverage=avgA([pct('AM Coverage',v('AM Coverage',r)),pct('PM Coverage',v('PM Coverage',r)),pct('PM Coverage by Frequency',v('PM Coverage by Frequency',r)),pct('Coverage of Served Customers',v('Coverage of Served Customers',r))]); coverage=coverage==null?null:coverage*100;
- let cq=[];let x=pct('Class A%',v('Class A%',r));if(x!=null)cq.push(x);x=pct('Class C%',v('Class C%',r),true);if(x!=null)cq.push(x);let ss=v('Standard Master File',r),aa=v('Actual Master File',r);if(ss!=null&&ss>0&&aa!=null){x=ratioPct(aa/ss);if(x!=null)cq.push(x)}x=pct('Customers count above 3K',v('Customers count above 3K',r));if(x!=null)cq.push(x);x=pct('Customers visited 12 or more times',v('Customers visited 12 or more times',r));if(x!=null)cq.push(x);let customer=cq.length?avgA(cq)*100:null;
+ let cq=[];let x=pct('Class A%',v('Class A%',r));if(x!=null)cq.push(x);x=pct('Class C%',v('Class C%',r),true);if(x!=null)cq.push(x);let ss=v('Standard Master File',r),aa=v('Actual Master File',r);if(ss!=null&&ss>0&&aa!=null){x=ratioPct(aa/ss);if(x!=null)cq.push(x)}x=pct('Customers count above 3K',v('Customers count above 3K',r));if(x!=null)cq.push(x);x=pct('Cov Served',v('Cov Served',r));if(x!=null)cq.push(x);let customer=cq.length?avgA(cq)*100:null;
  let productivity=pct('ROI of Served Customers',v('ROI of Served Customers',r));productivity=productivity==null?null:productivity*100;
- let development=pct('Total Coaching Halves',v('Total Coaching Halves',r));development=development==null?null:development*100;
  let progress=pct('Q2 Vs Q1 Progress',v('Q2 Vs Q1 Progress',r));progress=progress==null?null:progress*100;
- let dims={commercial,activity,coverage,customer,productivity,development,progress},score=0,weight=0;Object.keys(W).forEach(k=>{if(dims[k]!=null){score+=dims[k]*W[k];weight+=W[k]}});r['Performance Score']=weight?+(score/weight).toFixed(1):null;
- const inputs=['Total Ach.%','AM Ach.%','PM Ach.%','Total Working Hours','AM Call Rate','PM Call Rate','AM Coverage','PM Coverage','PM Coverage by Frequency','Coverage of Served Customers','Class A%','Class C%','Standard Master File','Actual Master File','Customers count above 3K','Customers visited 12 or more times','ROI of Served Customers','Total Coaching Halves','Q2 Vs Q1 Progress'];r['Score Data Completeness']=inputs.filter(k=>v(k,r)!=null).length/inputs.length;
+ let performanceItem=pct('Performance Item Ach%',v('Performance Item Ach%',r)); performanceItem=performanceItem==null?null:performanceItem*100;
+ let dims={totalAch,activity,coverage,customer,productivity,progress,performanceItem},score=0,weight=0;Object.keys(W).forEach(k=>{if(dims[k]!=null){score+=dims[k]*W[k];weight+=W[k]}});r['Performance Score']=weight?+(score/weight).toFixed(1):null;
+ const inputs=['Total Ach.%','AM Ach.%','PM Ach.%','Total Working Hours','AM Call Rate','PM Call Rate','AM Coverage','PM Coverage','PM Coverage by Frequency','Coverage of Served Customers','Class A%','Class C%','Standard Master File','Actual Master File','Customers count above 3K','Cov Served','ROI of Served Customers','Total Coaching Halves','Q2 Vs Q1 Progress','Performance Item Ach%'];r['Score Data Completeness']=inputs.filter(k=>v(k,r)!=null).length/inputs.length;
  let ach=v('Total Ach.%',r);r['Performance Classification']=ach==null?'Insufficient Data':ach<CONFIG.classCritical?'Critical Low Performer':ach<CONFIG.classLow?'Low Performer':ach<CONFIG.classNeeds?'Needs Improvement':ach<CONFIG.classStable?'Stable / Average':ach<CONFIG.classGood?'Good Performer':'High Performer';
 })}
 model();
@@ -197,16 +199,45 @@ function med(a,f){let x=a.map(r=>num(r[f])).filter(v=>v!=null).sort((a,b)=>a-b);
 function plot(id,data,layout={}){
  try{
   if(typeof Plotly==='undefined') return;
-  Plotly.react(id,data,Object.assign({
-   margin:{l:45,r:15,t:25,b:45},
+  const chartLayout=Object.assign({
+   margin:{l:45,r:15,t:25,b:125},
    paper_bgcolor:'#fff',
    plot_bgcolor:'#fff',
    font:{family:'Segoe UI,Arial',size:11,color:'#344054'},
-   legend:{orientation:'h'}
-  },layout),{responsive:true,displayModeBar:false});
+   legend:{orientation:'h',x:0,xanchor:'left',y:-0.34,yanchor:'top'}
+  },layout);
+  chartLayout.margin=Object.assign({l:45,r:15,t:25,b:125},layout.margin||{});
+  chartLayout.margin.b=Math.max(chartLayout.margin.b||0,125);
+  chartLayout.legend=Object.assign({orientation:'h',x:0,xanchor:'left',y:-0.34,yanchor:'top'},layout.legend||{});
+  Plotly.react(id,data,chartLayout,{responsive:true,displayModeBar:false});
  }catch(e){
   const el=document.getElementById(id);
   if(el) el.innerHTML='<div class="insight">Chart unavailable, but the underlying analysis is still shown.</div>';
+ }
+}
+function plotDumbbell(id,metric){
+ const el=document.getElementById(id);
+ if(!el)return;
+ if(typeof Plotly==='undefined'){el.innerHTML='<div class="insight">Chart unavailable, but the underlying values are still shown.</div>';return}
+ try{
+  const values=[metric.am,metric.pm].map(num);
+  const available=values.filter(v=>v!=null);
+  if(!available.length){el.innerHTML='<div class="insight">No AM/PM values available for this KPI.</div>';return}
+  const maxValue=available.length?Math.max(...available):0;
+  const traces=[];
+  if(values[0]!=null&&values[1]!=null)traces.push({x:values,y:[0,0],mode:'lines',line:{color:'#98a2b3',width:3},hoverinfo:'skip',showlegend:false});
+  if(values[0]!=null)traces.push({x:[values[0]],y:[0],mode:'markers',marker:{color:'#2563eb',size:13},name:'AM',hovertemplate:`AM: ${metric.format(values[0])}<extra></extra>`,showlegend:false});
+  if(values[1]!=null)traces.push({x:[values[1]],y:[0],mode:'markers',marker:{color:'#f97316',size:13},name:'PM',hovertemplate:`PM: ${metric.format(values[1])}<extra></extra>`,showlegend:false});
+  Plotly.react(id,traces,{
+   margin:{l:12,r:12,t:12,b:34},
+   paper_bgcolor:'#fff',plot_bgcolor:'#fff',
+   font:{family:'Segoe UI,Arial',size:10,color:'#344054'},
+   xaxis:{range:[0,maxValue>0?maxValue*1.2:1],title:{text:metric.axisTitle,font:{size:10}},tickformat:metric.isPercent?'.0%':'~g',showgrid:true,zeroline:false},
+   yaxis:{visible:false,range:[-0.7,0.7],fixedrange:true},
+   showlegend:false
+  },{responsive:true,displayModeBar:false});
+ }catch(e){
+  el.innerHTML='<div class="insight">Chart unavailable, but the underlying values are still shown.</div>';
  }
 }
 function card(label,value,hint=''){return `<div class="card"><div class="label">${label}</div><div class="value">${value}</div><div class="hint">${hint}</div></div>`}
@@ -300,9 +331,9 @@ const MONTHLY_NUMERIC_FIELDS=[
  'PM Coaching Halves','Standard Master File','Actual Master File','Class A%','Class C%',
  'PM Sales Value','PM FCT Value','PM Ach.%',
  'Total Working Hours','Total Coaching Halves','ROI of Served Customers',
- 'Customers count above 3K','Customers visited 12 or more times','Coverage of Served Customers',
+ 'Customers count above 3K','Cov Served','Coverage of Served Customers',
  'Total Sales Value','Total FCT Value','Total Ach.%',
- 'Q1 Ach%','Q2 Ach%','Q3 Ach%','Q4 Ach%','Q2 Vs Q1 Progress'
+ 'Q1 Ach%','Q2 Ach%','Q3 Ach%','Q4 Ach%','S1 Ach%','Performance Item Ach%','Q2 Vs Q1 Progress'
 ];
 
 function parseExcelNumber(x){
@@ -338,10 +369,36 @@ function normalizeHeader(h){
    'Part Time':'Part time',
    'Customers Count Above 3K':'Customers count above 3K',
    'Customers >3K':'Customers count above 3K',
-   'Customers Visited 12 or More Times':'Customers visited 12 or more times',
-   'Customers >=12 Visits':'Customers visited 12 or more times'
+   'Customers Visited 12 or More Times':'Cov Served',
+   'Customers visited 12 or more times':'Cov Served',
+   'customers visited 12 or more times':'Cov Served',
+   'Customers >=12 Visits':'Cov Served',
+   '+12 Visits':'Cov Served',
+   '12+ Visits':'Cov Served',
+   'Cov Served':'Cov Served',
+   'Cov. Served':'Cov Served',
+   'S1 Achievement':'S1 Ach%',
+   's1 achievement':'S1 Ach%',
+   'S1 Achievement%':'S1 Ach%',
+   's1 achievement%':'S1 Ach%',
+   'S1 Ach%':'S1 Ach%',
+   's1 ach%':'S1 Ach%',
+   'S1 Ach.%':'S1 Ach%',
+   's1 ach.%':'S1 Ach%',
+   'Semester 1 Achievement':'S1 Ach%',
+   'semester 1 achievement':'S1 Ach%',
+   'Semester 1 Achievement%':'S1 Ach%',
+   'semester 1 achievement%':'S1 Ach%',
+   'Performance Item Achievement':'Performance Item Ach%',
+   'performance item achievement':'Performance Item Ach%',
+   'Performance Item Achievement%':'Performance Item Ach%',
+   'performance item achievement%':'Performance Item Ach%',
+   'Performance Item Ach%':'Performance Item Ach%',
+   'performance item ach%':'Performance Item Ach%',
+   'Performance Item Ach.%':'Performance Item Ach%'
  };
- return aliases[k]||k;
+ const normalized=k.replace(/\s+/g,' ').trim();
+ return aliases[k]||aliases[normalized]||k;
 }
 
 
@@ -390,9 +447,9 @@ function diagnoseMonthlyRows(rows){
  rows.forEach(r=>{
    const gaps=[];
    const ach=num(r['Total Ach.%']);
-   const am=num(r['AM Ach.%']), pm=num(r['PM Ach.%']);
    const hours=num(r['Total Working Hours']);
    const pCall=num(r['PM Call Rate']);
+   const pmCoverage=num(r['PM Coverage']);
    const freq=num(r['PM Coverage by Frequency']);
    const aClass=num(r['Class A%']), cClass=num(r['Class C%']);
    const roi=num(r['ROI of Served Customers']);
@@ -400,14 +457,14 @@ function diagnoseMonthlyRows(rows){
 
    if(hours!=null && hours<CONFIG.gapWorkingHoursMin) gaps.push('Low working hours');
    if(pCall!=null && pCall<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
-   if(am!=null && am<CONFIG.gapAmExecutionMin) gaps.push('Weak AM execution');
-   if(pm!=null && pm<CONFIG.gapPmExecutionMin) gaps.push('Weak PM execution');
+   if(pmCoverage!=null && pmCoverage<CONFIG.gapPmCoverageMin) gaps.push('Low PM Coverage');
    if(freq!=null && freq<CONFIG.gapFrequencyMin) gaps.push('Frequency coverage gap');
    if(aClass!=null && aClass<CONFIG.gapClassAMin) gaps.push('Low Class A%');
    if(cClass!=null && cClass>CONFIG.gapClassCMax) gaps.push('High Class C%');
    if(masterGap!=null && masterGap>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
    if(roi!=null && roi>CONFIG.gapROIMin) gaps.push('Low ROI');
 
+   r.__kpiGapDetails=gaps;
    r['KPI Gaps']=gaps.length;
    r['Main Gap']=gaps[0]||'No major gap';
 
@@ -424,8 +481,7 @@ function diagnoseMonthlyRows(rows){
    const actions={
      'Low working hours':'Review daily working plan and field-time utilization.',
      'Low PM call rate':'Review PM call plan and doctor routing.',
-     'Weak AM execution':'Joint AM field visit; review AM execution and conversion.',
-     'Weak PM execution':'Joint PM field visit; review frequency, customer mix and conversion.',
+     'Low PM Coverage':'Review PM customer coverage and territory plan.',
      'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
      'Low Class A%':'Review customer mix and increase high-value customer coverage.',
      'High Class C%':'Reduce low-value customer dependency and improve customer mix.',
@@ -556,6 +612,8 @@ function page1(a,b){
  ${card('Avg Q2 Ach.%',fmtPct(avg(a,'Q2 Ach%')))}
  ${card('Avg Q3 Ach.%',fmtPct(avg(a,'Q3 Ach%')))}
  ${card('Avg Q4 Ach.%',fmtPct(avg(a,'Q4 Ach%')))}
+ ${card('Avg S1 Ach%',fmtPct(avg(a,'S1 Ach%')))}
+ ${card('Avg Performance Item Ach%',fmtPct(avg(a,'Performance Item Ach%')))}
  ${card('Avg Progress',fmtPct(avg(a,'Q2 Vs Q1 Progress')))}
  ${card('Low Performers',low,fmtPct(low/(a.length||1)))}
  ${card('Critical Low',crit,fmtPct(crit/(a.length||1)))}
@@ -630,6 +688,8 @@ function page1(a,b){
     ['MR Name','MR'],
     ['Team','Team'],
     ['DM Name','DM'],
+    ['S1 Ach%','S1 Ach%',fmtPct],
+    ['Performance Item Ach%','Performance Item Ach%',fmtPct],
     ['__displayAch','Ach.',fmtPct],
     ['__displayScore','Score',fmtN],
     ['__completeness','Data',scoreCompletenessPct],
@@ -642,7 +702,7 @@ function page1(a,b){
  const bottomEl=document.getElementById('p1bottom');
  if(bot.length){
    bottomEl.innerHTML=`<div class="scroll"><table><thead><tr>
-     <th>MR</th><th>Team</th><th>DM</th><th>Ach.</th><th>AM</th><th>PM</th><th>Main Gap</th><th>Priority</th>
+     <th>MR</th><th>Team</th><th>DM</th><th>Ach.</th><th>AM</th><th>PM</th><th>S1 Ach%</th><th>Performance Item Ach%</th><th>Main Gap</th><th>Priority</th>
    </tr></thead><tbody>${
      bot.map(r=>`<tr>
        <td>${esc(r['MR Name'])}</td>
@@ -651,6 +711,8 @@ function page1(a,b){
        <td>${fmtPct(r.__displayAch)}</td>
        <td>${fmtPct(r['AM Ach.%'])}</td>
        <td>${fmtPct(r['PM Ach.%'])}</td>
+       <td>${fmtPct(r['S1 Ach%'])}</td>
+       <td>${fmtPct(r['Performance Item Ach%'])}</td>
        <td>${esc(r['Main Gap'])}</td>
        <td>${badge(r['Priority'])}</td>
      </tr>`).join('')
@@ -682,7 +744,7 @@ function scoreCompletenessPct(value,r){
   'AM Call Rate','PM Call Rate','AM Coverage','PM Coverage',
   'PM Coverage by Frequency','Coverage of Served Customers',
   'Class A%','Class C%','Standard Master File','Actual Master File',
-  'Customers count above 3K','Customers visited 12 or more times',
+  'Customers count above 3K','Cov Served',
   'ROI of Served Customers','Total Coaching Halves'
  ];
  const available=fields.filter(f=>r[f]!==null && r[f]!==undefined && r[f]!=='' && Number.isFinite(Number(r[f]))).length;
@@ -708,8 +770,8 @@ function page2(a,b){
  el.innerHTML=`<div class="scroll"><table><thead><tr>
    <th>MR</th><th>Team</th><th>DM</th><th>Governorate</th><th>Tenure</th>
    <th>Sales</th><th>Ach.</th><th>AM</th><th>PM</th><th>Hours</th>
-   <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>ROI</th><th>&gt;3K</th><th>18+ Visits</th>
-   <th>Q1 Ach.%</th><th>Q2 Ach.%</th><th>Q3 Ach.%</th><th>Q4 Ach.%</th><th>Progress</th>
+   <th>AM Call Rate</th><th>PM Call Rate</th><th>AM Coverage</th><th>AM PHD Cov.</th><th>PM Coverage</th><th>PM Cov. Freq.</th><th>ROI</th><th>&gt;3K</th><th>Cov Served</th>
+   <th>Q1 Ach.%</th><th>Q2 Ach.%</th><th>Q3 Ach.%</th><th>Q4 Ach.%</th><th>S1 Ach%</th><th>Performance Item Ach%</th><th>Progress</th>
    <th>Score</th><th>Class</th><th>Main Gap</th><th>Priority</th>
  </tr></thead><tbody>${
  rows.map(r=>`<tr>
@@ -731,11 +793,13 @@ function page2(a,b){
    <td>${fmtPct(r['PM Coverage by Frequency'])}</td>
    <td>${fmtPct(r['ROI of Served Customers'])}</td>
    <td>${fmtN(r['Customers count above 3K'])}</td>
-   <td>${fmtN(r['Customers visited 12 or more times'])}</td>
+   <td>${fmtN(r['Cov Served'])}</td>
    <td>${fmtPct(r['Q1 Ach%'])}</td>
    <td>${fmtPct(r['Q2 Ach%'])}</td>
    <td>${fmtPct(r['Q3 Ach%'])}</td>
    <td>${fmtPct(r['Q4 Ach%'])}</td>
+   <td>${fmtPct(r['S1 Ach%'])}</td>
+   <td>${fmtPct(r['Performance Item Ach%'])}</td>
    <td>${fmtPct(r['Q2 Vs Q1 Progress'])}</td>
    <td>${fmtN(r['Performance Score'])}</td>
    <td>${esc(r['Performance Classification'])}</td>
@@ -768,6 +832,8 @@ function page3(a,b){
  ${card('Avg PM Coverage – Low', fmtPct(avg(lowRows,'PM Coverage')))}
  ${card('Avg PM Coverage Freq. – Low', fmtPct(avg(lowRows,'PM Coverage by Frequency')))}
  ${card('Avg Progress – Low', fmtPct(avg(lowRows,'Q2 Vs Q1 Progress')))}
+ ${card('Avg S1 Ach% – Low',fmtPct(avg(lowRows,'S1 Ach%')))}
+ ${card('Avg Performance Item Ach% – Low',fmtPct(avg(lowRows,'Performance Item Ach%')))}
  </div>
  <div class="panel">
    <h3>Low Performer Intervention Queue</h3>
@@ -796,7 +862,7 @@ function page3(a,b){
 
  el.innerHTML=`<div class="scroll"><table><thead><tr>
  <th>MR</th><th>Team</th><th>DM</th><th>Class</th><th>Total Ach.</th>
- <th>AM Ach.</th><th>PM Ach.</th><th>Progress</th><th>Main Gap</th><th>KPI Gaps</th>
+ <th>AM Ach.</th><th>PM Ach.</th><th>S1 Ach%</th><th>Performance Item Ach%</th><th>Progress</th><th>Main Gap</th><th>KPI Gaps</th>
  <th>Priority</th><th>Recommended Action</th>
  </tr></thead><tbody>${
  rows.map(r=>{
@@ -808,13 +874,13 @@ function page3(a,b){
      const gaps=[];
      if(num(r['Total Working Hours'])!=null && num(r['Total Working Hours'])<CONFIG.gapWorkingHoursMin) gaps.push('Low working hours');
      if(num(r['PM Call Rate'])!=null && num(r['PM Call Rate'])<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
-     if(num(r['AM Ach.%'])!=null && num(r['AM Ach.%'])<CONFIG.gapAmExecutionMin) gaps.push('Weak AM execution');
-     if(num(r['PM Ach.%'])!=null && num(r['PM Ach.%'])<CONFIG.gapPmExecutionMin) gaps.push('Weak PM execution');
+     if(num(r['PM Coverage'])!=null && num(r['PM Coverage'])<CONFIG.gapPmCoverageMin) gaps.push('Low PM Coverage');
      if(num(r['PM Coverage by Frequency'])!=null && num(r['PM Coverage by Frequency'])<CONFIG.gapFrequencyMin) gaps.push('Frequency coverage gap');
      if(num(r['Class A%'])!=null && num(r['Class A%'])<CONFIG.gapClassAMin) gaps.push('Low Class A%');
      if(num(r['Class C%'])!=null && num(r['Class C%'])>CONFIG.gapClassCMax) gaps.push('High Class C%');
      if(num(r['ROI of Served Customers'])!=null && num(r['ROI of Served Customers'])>CONFIG.gapROIMin) gaps.push('Low ROI');
      if(num(r['Standard Master File'])!=null && num(r['Actual Master File'])!=null && num(r['Standard Master File'])-num(r['Actual Master File'])>CONFIG.gapMasterFileMin) gaps.push('Master file gap');
+     r.__kpiGapDetails=gaps;
      mainGap=gaps[0]||'Insufficient data to confirm root cause.';
    }
 
@@ -848,9 +914,11 @@ function page3(a,b){
     <td>${fmtPct(ach)}</td>
     <td>${fmtPct(r['AM Ach.%'])}</td>
     <td>${fmtPct(r['PM Ach.%'])}</td>
+    <td>${fmtPct(r['S1 Ach%'])}</td>
+    <td>${fmtPct(r['Performance Item Ach%'])}</td>
     <td>${fmtPct(r['Q2 Vs Q1 Progress'])}</td>
     <td>${esc(mainGap)}</td>
-    <td>${fmtN(gapCount)}</td>
+    <td><span title="${esc(gapDetailsTitle(r))}">${fmtN(gapCount)}</span></td>
     <td>${badge(priority)}</td>
     <td>${esc(action)}</td>
    </tr>`;
@@ -861,32 +929,38 @@ function page3(a,b){
 function page4(a,b){
  b.innerHTML=`<div class="grid">${card('AM Ach.%',fmtPct(avg(a,'AM Ach.%')))}${card('PM Ach.%',fmtPct(avg(a,'PM Ach.%')))}${card('AM Sales',fmtMoney(sum(a,'AM Sales Value')))}${card('PM Sales',fmtMoney(sum(a,'PM Sales Value')))}${card('AM Hours',fmtN(avg(a,'AM Working Hours')))}${card('PM Hours',fmtN(avg(a,'PM Working Hours')))}</div>
  <div class="two"><div class="panel"><h3>AM vs PM Achievement</h3><div id="p4bar" class="smallplot"></div></div><div class="panel"><h3>AM/PM Execution Classification</h3><div id="p4class" class="smallplot"></div></div></div>
- <div class="panel"><h3>AM / PM KPI Comparison</h3><div id="p4radar" class="plot"></div></div>`;
+ <div class="panel"><h3>AM / PM KPI Comparison</h3><div class="hint">AM (blue) vs PM (orange) • each KPI uses its own scale</div><div id="p4dumbbells" class="p4-metrics"></div></div>`;
  plot('p4bar',[{x:['AM','PM'],y:[avg(a,'AM Ach.%')*100,avg(a,'PM Ach.%')*100],type:'bar',text:[fmtPct(avg(a,'AM Ach.%')),fmtPct(avg(a,'PM Ach.%'))],textposition:'auto'}],{yaxis:{title:'Achievement %'}});
  let cls={'Strong AM / Strong PM':0,'Strong AM / Weak PM':0,'Weak AM / Strong PM':0,'Weak AM / Weak PM':0};
  a.forEach(r=>{let am=(r['AM Ach.%']||0)>=1,pm=(r['PM Ach.%']||0)>=1;cls[(am?'Strong AM':'Weak AM')+' / '+(pm?'Strong PM':'Weak PM')]++});
  plot('p4class',[{x:Object.keys(cls),y:Object.values(cls),type:'bar',text:Object.values(cls),textposition:'auto'}],{yaxis:{title:'MRs'},xaxis:{tickangle:-15}});
- let metrics=[['Working Hours',avg(a,'AM Working Hours'),avg(a,'PM Working Hours')],['Call Rate',avg(a,'AM Call Rate'),avg(a,'PM Call Rate')],['Coverage',avg(a,'AM Coverage'),avg(a,'PM Coverage')],['Achievement',avg(a,'AM Ach.%'),avg(a,'PM Ach.%')]];
- let trace1={r:metrics.map(x=>x[1]),theta:metrics.map(x=>x[0]),fill:'toself',name:'AM',type:'scatterpolar'};
- let trace2={r:metrics.map(x=>x[2]),theta:metrics.map(x=>x[0]),fill:'toself',name:'PM',type:'scatterpolar'};
- plot('p4radar',[trace1,trace2],{polar:{radialaxis:{visible:true}},showlegend:true});
+ let metrics=[
+  {label:'Working Hours',am:avg(a,'AM Working Hours'),pm:avg(a,'PM Working Hours'),format:fmtN,axisTitle:'Hours'},
+  {label:'Call Rate',am:avg(a,'AM Call Rate'),pm:avg(a,'PM Call Rate'),format:fmtPct,axisTitle:'Rate (%)',isPercent:true},
+  {label:'Coverage',am:avg(a,'AM Coverage'),pm:avg(a,'PM Coverage'),format:fmtPct,axisTitle:'Coverage (%)',isPercent:true},
+  {label:'Achievement',am:avg(a,'AM Ach.%'),pm:avg(a,'PM Ach.%'),format:fmtPct,axisTitle:'Achievement (%)',isPercent:true}
+ ];
+ const metricContainer=b.querySelector('#p4dumbbells');
+ metricContainer.innerHTML=metrics.map((metric,i)=>`<div class="p4-metric"><h4>${metric.label}</h4><div class="p4-metric-values"><span style="color:#2563eb">AM ${metric.format(metric.am)}</span><span style="color:#f97316">PM ${metric.format(metric.pm)}</span></div><div id="p4metric${i}" class="p4-metric-chart"></div></div>`).join('');
+ metrics.forEach((metric,i)=>plotDumbbell(`p4metric${i}`,metric));
 }
 function page5(a,b){
- b.innerHTML=`<div class="two"><div class="panel"><h3>Working Hours vs Sales</h3><div id="p5sc1" class="plot"></div></div><div class="panel"><h3>AM Call Rate vs Achievement</h3><div id="p5sc2am" class="plot"></div></div></div>
- <div class="panel"><h3>PM Call Rate vs Achievement</h3><div id="p5sc2pm" class="plot"></div></div>
+ b.innerHTML=`<div class="two"><div class="panel"><h3>Working Hours vs Ach</h3><div id="p5sc1" class="plot"></div></div><div class="panel"><h3>AM Call Rate vs AM Ach</h3><div id="p5sc2am" class="plot"></div></div></div>
+ <div class="panel"><h3>PM Call Rate vs PM Ach</h3><div id="p5sc2pm" class="plot"></div></div>
  <div class="two"><div class="panel"><h3>Diagnostic Quadrants — AM Call Rate</h3><div id="p5diagam"></div></div><div class="panel"><h3>Diagnostic Quadrants — PM Call Rate</h3><div id="p5diagpm"></div></div></div>`;
  let cls=['Critical Low Performer','Low Performer','Needs Improvement','Stable / Average','Good Performer','High Performer'];
- let traces=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>r['Total Working Hours']),y:x.map(r=>r['Total Sales Value']),mode:'markers',name:c,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>Hours=%{x:.1f}<br>Sales=%{y:,.0f}<extra></extra>'}});
- plot('p5sc1',traces,{xaxis:{title:'Total Working Hours'},yaxis:{title:'Total Sales Value'}});
+ let traces=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>r['Total Working Hours']),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:c,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>Hours=%{x:.1f}<br>Ach=%{y:.1f}%<extra></extra>'}});
+ plot('p5sc1',traces,{margin:{l:55,r:20,t:35,b:75},xaxis:{title:'Total Working Hours'},yaxis:{title:'Total Achievement %'}});
 
- function renderCallRateAnalysis(field,label,scatterId,diagId){
-  let traces2=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>(r[field]||0)*100),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:c,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>'+label+'=%{x:.1f}%<br>Ach=%{y:.1f}%<extra></extra>'}});
-  plot(scatterId,traces2,{xaxis:{title:label},yaxis:{title:'Total Achievement %'},shapes:[{type:'line',x0:0,x1:100,y0:100,y1:100,line:{dash:'dot'}},{type:'line',x0:100,x1:100,y0:0,y1:150,line:{dash:'dot'}}]});
+ function renderCallRateAnalysis(field,achField,label,scatterId,diagId){
+  const achievementLabel=achField.replace('.%','%');
+  let traces2=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>(r[field]||0)*100),y:x.map(r=>r[achField]*100),mode:'markers',name:c,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>'+label+'=%{x:.1f}%<br>'+achievementLabel+'=%{y:.1f}%<extra></extra>'}});
+  plot(scatterId,traces2,{margin:{l:55,r:20,t:35,b:75},xaxis:{title:label},yaxis:{title:achField},shapes:[{type:'line',x0:0,x1:100,y0:100,y1:100,line:{dash:'dot'}},{type:'line',x0:100,x1:100,y0:0,y1:150,line:{dash:'dot'}}]});
   let m=med(a,field);
-  let highActLow=a.filter(r=>r['Total Ach.%']<1 && (r[field]||0)>=m);
-  let lowActLow=a.filter(r=>r['Total Ach.%']<1 && (r[field]||0)<m);
-  let highActHigh=a.filter(r=>r['Total Ach.%']>=1 && (r[field]||0)>=m);
-  let lowActHigh=a.filter(r=>r['Total Ach.%']>=1 && (r[field]||0)<m);
+  let highActLow=a.filter(r=>r[achField]<1 && (r[field]||0)>=m);
+  let lowActLow=a.filter(r=>r[achField]<1 && (r[field]||0)<m);
+  let highActHigh=a.filter(r=>r[achField]>=1 && (r[field]||0)>=m);
+  let lowActHigh=a.filter(r=>r[achField]>=1 && (r[field]||0)<m);
   document.getElementById(diagId).innerHTML=[
    ['High '+label+' / Low achievement',highActLow.length,'Potential productivity/conversion issue — validate customer quality and conversion.'],
    ['Low '+label+' / Low achievement',lowActLow.length,'Potential execution/discipline issue — review route plan and working hours.'],
@@ -894,37 +968,40 @@ function page5(a,b){
    ['Low '+label+' / High achievement',lowActHigh.length,'Potentially productive MRs — study territory/productivity model before changing activity.']
   ].map(x=>`<div class="insight"><b>${x[0]}</b>: ${x[1]} MRs — ${x[2]}</div>`).join('');
  }
- renderCallRateAnalysis('AM Call Rate','AM Call Rate','p5sc2am','p5diagam');
- renderCallRateAnalysis('PM Call Rate','PM Call Rate','p5sc2pm','p5diagpm');
+ renderCallRateAnalysis('AM Call Rate','AM Ach.%','AM Call Rate','p5sc2am','p5diagam');
+ renderCallRateAnalysis('PM Call Rate','PM Ach.%','PM Call Rate','p5sc2pm','p5diagpm');
 }
 function page6(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtN(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg >3K Customers',fmtN(avg(a,'Customers count above 3K')))}${card('Avg 18+ Visits',fmtN(avg(a,'Customers visited 12 or more times')))}${card('Avg Served Coverage',fmtPct(avg(a,'Coverage of Served Customers')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtN(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg >3K Customers',fmtN(avg(a,'Customers count above 3K')))}${card('Avg Cov Served',fmtN(avg(a,'Cov Served')))}${card('Avg Served Coverage',fmtPct(avg(a,'Coverage of Served Customers')))}</div>
  <div class="two"><div class="panel"><h3>Class A vs Class C</h3><div id="p6bar" class="smallplot"></div></div><div class="panel"><h3>Master File Gap</h3><div id="p6mf" class="smallplot"></div></div></div>
  <div class="panel"><h3>Customer Quality Flags</h3><div id="p6table"></div></div>`;
  plot('p6bar',[{x:['Class A%','Class C%'],y:[avg(a,'Class A%')*100,avg(a,'Class C%')*100],type:'bar',text:[fmtPct(avg(a,'Class A%')),fmtPct(avg(a,'Class C%'))],textposition:'auto'}],{yaxis:{title:'%'}});
  let gap=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,15);
  plot('p6mf',[{x:gap.map(r=>r['MR Name']),y:gap.map(r=>r['Master File Gap']),type:'bar'}],{yaxis:{title:'Standard - Actual'},xaxis:{tickangle:-45}});
  let rows=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,30);
- b.querySelector('#p6table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtN],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['Customers count above 3K','>3K',fmtN],['Customers visited 12 or more times','18+ Visits',fmtN],['ROI of Served Customers','ROI',fmtPct]]);
+ b.querySelector('#p6table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtN],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['Customers count above 3K','>3K',fmtN],['Cov Served','Cov Served',fmtN],['ROI of Served Customers','ROI',fmtPct]]);
 }
 function page7(a,b){
- let teams=[...new Set(a.map(r=>r.Team))]; let teamRows=teams.map(t=>{let x=a.filter(r=>r.Team===t);return {Team:t,MRs:x.length,Sales:sum(x,'Total Sales Value'),Ach:avg(x,'Total Ach.%'),Low:count(x,r=>['Critical Low Performer','Low Performer'].includes(r['Performance Classification'])),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}).sort((x,y)=>y.Ach-x.Ach);
- let dms=[...new Set(a.map(r=>r['DM Name']))]; let dmRows=dms.map(t=>{let x=a.filter(r=>r['DM Name']===t);return {DM:t,MRs:x.length,Sales:sum(x,'Total Sales Value'),Ach:avg(x,'Total Ach.%'),Low:count(x,r=>['Critical Low Performer','Low Performer'].includes(r['Performance Classification'])),Critical:count(x,r=>r['Performance Classification']==='Critical Low Performer'),Coaching:avg(x,'Total Coaching Halves'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}).sort((x,y)=>y.Ach-x.Ach);
+ let teams=[...new Set(a.map(r=>r.Team))];  let teamRows=teams.map(t=>{let x=a.filter(r=>r.Team===t);return {Team:t,MRs:x.length,Sales:sum(x,'Total Sales Value'),Ach:avg(x,'Total Ach.%'),S1:avg(x,'S1 Ach%'),PerformanceItem:avg(x,'Performance Item Ach%'),Low:count(x,r=>['Critical Low Performer','Low Performer'].includes(r['Performance Classification'])),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}).sort((x,y)=>y.Ach-x.Ach);
+ let dms=[...new Set(a.map(r=>r['DM Name']))]; let dmRows=dms.map(t=>{let x=a.filter(r=>r['DM Name']===t);return {DM:t,MRs:x.length,Sales:sum(x,'Total Sales Value'),Ach:avg(x,'Total Ach.%'),S1:avg(x,'S1 Ach%'),PerformanceItem:avg(x,'Performance Item Ach%'),Low:count(x,r=>['Critical Low Performer','Low Performer'].includes(r['Performance Classification'])),Critical:count(x,r=>r['Performance Classification']==='Critical Low Performer'),Coaching:avg(x,'Total Coaching Halves'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}).sort((x,y)=>y.Ach-x.Ach);
  b.innerHTML=`<div class="two"><div class="panel"><h3>Team Ranking</h3><div id="p7team"></div></div><div class="panel"><h3>DM Ranking</h3><div id="p7dm"></div></div></div><div class="panel"><h3>Management flag: high average achievement does not automatically mean low risk</h3><div id="p7flag"></div></div>`;
- b.querySelector('#p7team').innerHTML=table(teamRows,[['Team','Team'],['MRs','MRs',fmtN],['Sales','Sales',fmtMoney],['Ach','Avg Ach.',fmtPct],['Low','Low',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]]);
- b.querySelector('#p7dm').innerHTML=table(dmRows,[['DM','DM'],['MRs','MRs',fmtN],['Sales','Sales',fmtMoney],['Ach','Avg Ach.',fmtPct],['Low','Low',fmtN],['Critical','Critical',fmtN],['Coaching','Coaching',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]]);
+ b.querySelector('#p7team').innerHTML=table(teamRows,[['Team','Team'],['MRs','MRs',fmtN],['Sales','Sales',fmtMoney],['Ach','Avg Ach.',fmtPct],['S1','S1 Ach%',fmtPct],['PerformanceItem','Performance Item Ach%',fmtPct],['Low','Low',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]]);
+ b.querySelector('#p7dm').innerHTML=table(dmRows,[['DM','DM'],['MRs','MRs',fmtN],['Sales','Sales',fmtMoney],['Ach','Avg Ach.',fmtPct],['S1','S1 Ach%',fmtPct],['PerformanceItem','Performance Item Ach%',fmtPct],['Low','Low',fmtN],['Critical','Critical',fmtN],['Coaching','Coaching',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]]);
  let flags=dmRows.filter(x=>x.Low/x.MRs>.25).sort((x,y)=>(y.Low/y.MRs)-(x.Low/x.MRs)).slice(0,8);
  b.querySelector('#p7flag').innerHTML=flags.map(x=>`<div class="insight"><b>${esc(x.DM)}</b>: ${fmtPct(x.Low/x.MRs)} low performers across ${x.MRs} MRs; avg achievement ${fmtPct(x.Ach)}. ${x.Critical?x.Critical+' critical performers require immediate review.':''}</div>`).join('')||'<div class="insight">No DM crosses the 25% low-performer flag in the current selection.</div>';
 }
 function page8(a,b){
  b.innerHTML=`<div class="grid">${card('Avg Coaching Halves',fmtN(avg(a,'Total Coaching Halves')))}${card('Avg AM Coaching',fmtN(avg(a,'AM Coaching Halves')))}${card('Avg PM Coaching',fmtN(avg(a,'PM Coaching Halves')))}${card('Low Coaching MRs',count(a,r=>(r['Total Coaching Halves']||0)<med(a,'Total Coaching Halves')))}${card('Avg Achievement',fmtPct(avg(a,'Total Ach.%')))}</div>
  <div class="two"><div class="panel"><h3>Coaching vs Achievement</h3><div id="p8sc" class="plot"></div></div><div class="panel"><h3>Coaching by Team</h3><div id="p8team" class="smallplot"></div></div></div>
+ <div class="panel"><h3>MR Coaching Details</h3><div id="p8table"></div></div>
  <div class="panel"><div class="insight">Interpretation rule: this page shows association only. It does not claim coaching causes higher achievement.</div></div>`;
  let cls=['Critical Low Performer','Low Performer','Needs Improvement','Stable / Average','Good Performer','High Performer'];
- let traces=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>r['Total Coaching Halves']),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:c,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>Coaching=%{x:.1f}<br>Ach=%{y:.1f}%<extra></extra>'}});
+ let traces=cls.map(c=>{let x=a.filter(r=>r['Performance Classification']===c);return {x:x.map(r=>r['Total Coaching Halves']),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:c,text:x.map(r=>r['MR Name']),customdata:x.map(r=>r['Hire Date']||'—'),hovertemplate:'%{text}<br>Hire Date=%{customdata}<br>Coaching=%{x:.1f}<br>Ach=%{y:.1f}%<extra></extra>'}});
  plot('p8sc',traces,{xaxis:{title:'Total Coaching Halves'},yaxis:{title:'Total Achievement %'}});
  let teams=[...new Set(a.map(r=>r.Team))]; let vals=teams.map(t=>avg(a.filter(r=>r.Team===t),'Total Coaching Halves'));
  plot('p8team',[{x:teams,y:vals,type:'bar',text:vals.map(v=>fmtN(v)),textposition:'auto'}],{yaxis:{title:'Avg Coaching Halves'},xaxis:{tickangle:-35}});
+ const coachingRows=[...a].sort((x,y)=>String(x['MR Name']||'').localeCompare(String(y['MR Name']||'')));
+ b.querySelector('#p8table').innerHTML=table(coachingRows,[['MR Name','MR'],['Team','Team'],['Hire Date','Hiring Date',v=>esc(v||'—')],['Tenure Years','Tenure (Years)',fmtN],['Total Coaching Halves','Total Coaching',fmtN],['AM Coaching Halves','AM Coaching',fmtN],['PM Coaching Halves','PM Coaching',fmtN],['Total Ach.%','Total Ach%',fmtPct]]);
 }
 function page9(a,b){
  const tenurePresent = uniq('Tenure Group', a);
@@ -953,30 +1030,30 @@ function page9(a,b){
   document.getElementById('p9pt').innerHTML='<div class="insight">No employment-type data available for the current selection.</div>';
  }
 
- let rows=groups.map(g=>{let x=a.filter(r=>r['Tenure Group']===g);return {Group:g,MRs:x.length,Ach:avg(x,'Total Ach.%'),Sales:sum(x,'Total Sales Value'),Hours:avg(x,'Total Working Hours'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}})
- rows.push(...pts.map(g=>{let x=a.filter(r=>r['Part time']===g);return {Group:g,MRs:x.length,Ach:avg(x,'Total Ach.%'),Sales:sum(x,'Total Sales Value'),Hours:avg(x,'Total Working Hours'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}));
+ let rows=groups.map(g=>{let x=a.filter(r=>r['Tenure Group']===g);return {Group:g,MRs:x.length,Ach:avg(x,'Total Ach.%'),S1:avg(x,'S1 Ach%'),PerformanceItem:avg(x,'Performance Item Ach%'),Sales:sum(x,'Total Sales Value'),Hours:avg(x,'Total Working Hours'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}})
+ rows.push(...pts.map(g=>{let x=a.filter(r=>r['Part time']===g);return {Group:g,MRs:x.length,Ach:avg(x,'Total Ach.%'),S1:avg(x,'S1 Ach%'),PerformanceItem:avg(x,'Performance Item Ach%'),Sales:sum(x,'Total Sales Value'),Hours:avg(x,'Total Working Hours'),AMCall:avg(x,'AM Call Rate'),PMCall:avg(x,'PM Call Rate'),AMCov:avg(x,'AM Coverage'),AMPHDCov:avg(x,'AM PHD Coverage'),PMCov:avg(x,'PM Coverage'),PMCovFreq:avg(x,'PM Coverage by Frequency'),ROI:avg(x,'ROI of Served Customers'),Progress:avg(x,'Q2 Vs Q1 Progress')}}));
  b.querySelector('#p9table').innerHTML = rows.length
-  ? table(rows,[['Group','Group'],['MRs','MRs',fmtN],['Ach','Ach.',fmtPct],['Sales','Sales',fmtMoney],['Hours','Hours',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]])
+  ? table(rows,[['Group','Group'],['MRs','MRs',fmtN],['Ach','Ach.',fmtPct],['S1','S1 Ach%',fmtPct],['PerformanceItem','Performance Item Ach%',fmtPct],['Sales','Sales',fmtMoney],['Hours','Hours',fmtN],['AMCall','AM Call Rate',fmtPct],['PMCall','PM Call Rate',fmtPct],['AMCov','AM Coverage',fmtPct],['AMPHDCov','AM PHD Coverage',fmtPct],['PMCov','PM Coverage',fmtPct],['PMCovFreq','PM Coverage Freq.',fmtPct],['ROI','ROI',fmtPct],['Progress','Progress',fmtPct]])
   : '<div class="insight">No tenure or employment-type data available for the current selection.</div>';
 }
 function page10(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Performance Score',fmtN(avg(a,'Performance Score')))}${card('Top Score',fmtN(Math.max(...a.map(r=>r['Performance Score']||0))))}${card('Score <50',count(a,r=>(r['Performance Score']||0)<50))}${card('High Potential',count(a,r=>r.Potential==='High Potential'))}${card('Avg Data Completeness',fmtPct(avg(a,'Score Data Completeness')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Performance Score',fmtN(avg(a,'Performance Score')))}${card('Top Score',fmtN(Math.max(...a.map(r=>r['Performance Score']||0))))}${card('Score <50',count(a,r=>(r['Performance Score']||0)<50))}${card('High Potential',count(a,r=>r.Potential==='High Potential'))}${card('Avg Data Completeness',fmtPct(avg(a,'Score Data Completeness')))}${card('Avg S1 Ach%',fmtPct(avg(a,'S1 Ach%')))}${card('Avg Performance Item Ach%',fmtPct(avg(a,'Performance Item Ach%')))}</div>
  <div class="two"><div class="panel"><h3>Score Distribution</h3><div id="p10hist" class="smallplot"></div></div><div class="panel"><h3>Top / Bottom Score</h3><div id="p10table"></div></div></div>
- <div class="panel"><h3>Scoring Methodology</h3><div class="insight">Commercial ${(CONFIG.wCommercial*100).toFixed(0)}% (Total/AM/PM achievement, each capped at 150% so a tiny FCT denominator cannot create an extreme score); Activity ${(CONFIG.wActivity*100).toFixed(0)}%; Coverage ${(CONFIG.wCoverage*100).toFixed(0)}%; Customer Quality ${(CONFIG.wCustomer*100).toFixed(0)}% (Class A, inverse Class C, master-file ratio, high-value/frequency customers); Productivity ${(CONFIG.wProductivity*100).toFixed(0)}%; Development ${(CONFIG.wDevelopment*100).toFixed(0)}%; Progress ${(CONFIG.wProgress*100).toFixed(0)}% (Q2 Ach% vs Q1 Ach%, ranked against peers — rewards MRs trending upward regardless of absolute level). Missing KPIs are handled by re-normalizing the available dimension weights. Data Completeness shows the evidence coverage. The Top 10 list excludes Low/Critical MRs because they are intervention cases, even if another dimension is strong.</div></div>`;
+ <div class="panel"><h3>Scoring Methodology</h3> <div class="insight">Total Ach% ${(CONFIG.wTotalAch*100).toFixed(0)}% (mean of Total, AM and PM achievement, capped at 150%); Activity ${(CONFIG.wActivity*100).toFixed(0)}% (peer percentiles of working hours and AM/PM call rates); Coverage ${(CONFIG.wCoverage*100).toFixed(0)}% (peer percentiles of AM/PM coverage, PM frequency coverage and served-customer coverage); Customer Quality ${(CONFIG.wCustomer*100).toFixed(0)}% (peer percentiles of Class A, inverse Class C, master-file ratio and Cov Served); Productivity ${(CONFIG.wProductivity*100).toFixed(0)}% (ROI peer percentile); Progress ${(CONFIG.wProgress*100).toFixed(0)}% (peer percentile of achievement trend); Performance Item Ach% ${(CONFIG.wPerformanceItem*100).toFixed(0)}% (peer percentile for achievement on strategic products). Coaching indicators remain available on the Coaching Effectiveness page and are not part of this score. Default weights total 100%. When dimensions have missing data, it re-normalizes the available weights. Data Completeness shows evidence coverage. The Top 10 excludes Low/Critical MRs because they are intervention cases.</div></div>`;
  plot('p10hist',[{x:a.map(r=>r['Performance Score']),type:'histogram',nbinsx:20}],{xaxis:{title:'Performance Score'},yaxis:{title:'MRs'}});
  let rows=[...a].sort((x,y)=>(y['Performance Score']||0)-(x['Performance Score']||0)).slice(0,15);
- b.querySelector('#p10table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Performance Score','Score',fmtN],['Score Data Completeness','Data',fmtPct],['Total Ach.%','Ach.',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['Main Gap','Gap'],['Priority','Priority',badge]]);
+ b.querySelector('#p10table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['Performance Score','Score',fmtN],['Score Data Completeness','Data',fmtPct],['Total Ach.%','Ach.',fmtPct],['S1 Ach%','S1 Ach%',fmtPct],['Performance Item Ach%','Performance Item Ach%',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['Main Gap','Gap'],['Priority','Priority',badge]]);
 }
 function page11(a,b){
  b.innerHTML=`<div class="two"><div class="panel"><h3>Risk Matrix</h3><div id="p11sc" class="plot"></div></div><div class="panel"><h3>Risk Distribution</h3><div id="p11bar" class="smallplot"></div></div></div>
  <div class="panel"><h3>Risk Queue</h3><div id="p11table"></div></div>`;
- let traces=['P1 – Immediate Intervention','P2 – High Priority','P3 – Development','P4 – Monitor'].map(p=>{let x=a.filter(r=>r.Priority===p);return {x:x.map(r=>r['KPI Gaps']),y:x.map(r=>r['Total Ach.%']*100),mode:'markers',name:p,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>KPI gaps=%{x}<br>Ach=%{y:.1f}%<extra></extra>'}});
+ let traces=['P1 – Immediate Intervention','P2 – High Priority','P3 – Development','P4 – Monitor'].map(p=>{let x=a.filter(r=>r.Priority===p);return {x:x.map(r=>r['KPI Gaps']),y:x.map(r=>r['Total Ach.%']*100),customdata:x.map(gapDetailsTitle),mode:'markers',name:p,text:x.map(r=>r['MR Name']),hovertemplate:'%{text}<br>KPI gaps=%{x}<br>%{customdata}<br>Ach=%{y:.1f}%<extra></extra>'}});
  plot('p11sc',traces,{xaxis:{title:'Number of KPI Gaps'},yaxis:{title:'Achievement %'}});
  let ps=['P1 – Immediate Intervention','P2 – High Priority','P3 – Development','P4 – Monitor'];
  let vv=ps.map(p=>count(a,r=>r.Priority===p));
  plot('p11bar',[{x:ps,y:vv,type:'bar',text:vv,textposition:'auto'}],{xaxis:{tickangle:-15},yaxis:{title:'MRs'}});
  let riskOrder={'P1 – Immediate Intervention':1,'P2 – High Priority':2,'P3 – Development':3,'P4 – Monitor':4}; let rows=[...a].sort((x,y)=>(riskOrder[x.Priority]-riskOrder[y.Priority]) || ((x['Total Ach.%']||9)-(y['Total Ach.%']||9)));
- b.querySelector('#p11table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['DM Name','DM'],['Priority','Risk',badge],['Total Ach.%','Ach.',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['KPI Gaps','KPI Gaps',fmtN],['Main Gap','Main Gap'],['Potential','Potential']]);
+ b.querySelector('#p11table').innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['DM Name','DM'],['Priority','Risk',badge],['Total Ach.%','Ach.',fmtPct],['S1 Ach%','S1 Ach%',fmtPct],['Performance Item Ach%','Performance Item Ach%',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['KPI Gaps','KPI Gaps',fmtGapCount],['Main Gap','Main Gap'],['Potential','Potential']]);
 }
 function page12(a,b){
  b.innerHTML=`<div class="panel"><h3>Action Plan — MRs requiring intervention (P1–P3), ranked by priority</h3><div id="p12table"></div></div>`;
@@ -986,7 +1063,7 @@ function page12(a,b){
    el.innerHTML='<div class="insight">No MRs requiring intervention (P1–P3) in the current selection.</div>';
    return;
  }
- el.innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['DM Name','DM'],['Total Ach.%','Ach.',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['Main Gap','Problem / Root Cause'],['KPI Gaps','KPI Gaps',fmtN],['Potential','Potential'],['Priority','Priority',badge],['Recommended Action','Recommended Action']]);
+ el.innerHTML=table(rows,[['MR Name','MR'],['Team','Team'],['DM Name','DM'],['Total Ach.%','Ach.',fmtPct],['S1 Ach%','S1 Ach%',fmtPct],['Performance Item Ach%','Performance Item Ach%',fmtPct],['Q2 Vs Q1 Progress','Progress',fmtPct],['Main Gap','Problem / Root Cause'],['KPI Gaps','KPI Gaps',fmtGapCount],['Potential','Potential'],['Priority','Priority',badge],['Recommended Action','Recommended Action']]);
 }
 
 function page13(a,b){
@@ -1004,15 +1081,15 @@ function page13(a,b){
  </div>
  <div class="panel">
   <h3>Performance Score Weights</h3>
-  <div class="insight">Weights should add up to 100%. If they don't, the score is automatically re-normalized based on what you enter.</div>
+  <div class="insight">Each weight controls that dimension's contribution to the Performance Score. Hover over a weight name or read its explanation. Default weights total 100%; the score re-normalizes over dimensions with available data.</div>
   <table style="width:100%;font-size:12px;margin-top:8px;max-width:520px">
-   <tr><td style="padding:6px 8px">Commercial</td><td><input id="cfgWCommercial" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Activity</td><td><input id="cfgWActivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Coverage</td><td><input id="cfgWCoverage" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Customer Quality</td><td><input id="cfgWCustomer" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Productivity</td><td><input id="cfgWProductivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Development</td><td><input id="cfgWDevelopment" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
-   <tr><td style="padding:6px 8px">Progress</td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Mean of Total, AM and PM achievement; capped at 150% and scaled to the score range."><b>Total Ach%</b><div class="hint">Total, AM and PM achievement</div></td><td><input id="cfgWTotalAch" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentile ranks for Total Working Hours, AM Call Rate and PM Call Rate."><b>Activity</b><div class="hint">Working hours and AM/PM call rates</div></td><td><input id="cfgWActivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentile ranks for AM/PM coverage, PM frequency coverage and served-customer coverage."><b>Coverage</b><div class="hint">AM/PM, frequency and served-customer coverage</div></td><td><input id="cfgWCoverage" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentiles for customer class, master-file ratio and Cov Served."><b>Customer Quality</b><div class="hint">Customer class, master file and Cov Served</div></td><td><input id="cfgWCustomer" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentile rank for ROI of Served Customers."><b>Productivity</b><div class="hint">ROI of served customers</div></td><td><input id="cfgWProductivity" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentile rank for achievement trend."><b>Progress</b><div class="hint">Achievement trend</div></td><td><input id="cfgWProgress" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
+   <tr><td style="padding:6px 8px" title="Peer percentile rank for Performance Item Ach%."><b>Performance Item Ach%</b><div class="hint">Achievement on strategic products</div></td><td><input id="cfgWPerformanceItem" type="number" step="1" style="width:90px" oninput="updateWeightSumHint()"> %</td></tr>
   </table>
   <div id="cfgWeightSum" class="hint" style="margin-top:6px"></div>
  </div>
@@ -1037,8 +1114,7 @@ function page13(a,b){
   <table style="width:100%;font-size:12px;margin-top:8px;max-width:560px">
    <tr><td style="padding:6px 8px">Low Working Hours — below</td><td><input id="cfgGapHours" type="number" step="0.1" style="width:90px"> hours</td></tr>
    <tr><td style="padding:6px 8px">Low PM Call Rate — below</td><td><input id="cfgGapPmCall" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">Weak AM Execution — below</td><td><input id="cfgGapAmExec" type="number" step="0.1" style="width:90px"> %</td></tr>
-   <tr><td style="padding:6px 8px">Weak PM Execution — below</td><td><input id="cfgGapPmExec" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">PM Coverage — below</td><td><input id="cfgGapPmCoverage" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Frequency Coverage — below</td><td><input id="cfgGapFrequency" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Low Class A% — below</td><td><input id="cfgGapClassA" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">High Class C% — above</td><td><input id="cfgGapClassC" type="number" step="0.1" style="width:90px"> %</td></tr>
@@ -1059,13 +1135,13 @@ function fillConfigForm(){
  document.getElementById('cfgNeeds').value=(CONFIG.classNeeds*100).toFixed(1);
  document.getElementById('cfgStable').value=(CONFIG.classStable*100).toFixed(1);
  document.getElementById('cfgGood').value=(CONFIG.classGood*100).toFixed(1);
- document.getElementById('cfgWCommercial').value=(CONFIG.wCommercial*100).toFixed(0);
+ document.getElementById('cfgWTotalAch').value=(CONFIG.wTotalAch*100).toFixed(0);
  document.getElementById('cfgWActivity').value=(CONFIG.wActivity*100).toFixed(0);
  document.getElementById('cfgWCoverage').value=(CONFIG.wCoverage*100).toFixed(0);
  document.getElementById('cfgWCustomer').value=(CONFIG.wCustomer*100).toFixed(0);
  document.getElementById('cfgWProductivity').value=(CONFIG.wProductivity*100).toFixed(0);
- document.getElementById('cfgWDevelopment').value=(CONFIG.wDevelopment*100).toFixed(0);
  document.getElementById('cfgWProgress').value=(CONFIG.wProgress*100).toFixed(0);
+ document.getElementById('cfgWPerformanceItem').value=(CONFIG.wPerformanceItem*100).toFixed(0);
  document.getElementById('cfgP1Ach').value=(CONFIG.priorityP1Ach*100).toFixed(1);
  document.getElementById('cfgP1Gaps').value=CONFIG.priorityP1MinGaps;
  document.getElementById('cfgP2Ach').value=(CONFIG.priorityP2Ach*100).toFixed(1);
@@ -1073,8 +1149,7 @@ function fillConfigForm(){
  document.getElementById('cfgPotMax').value=(CONFIG.potentialMaxAch*100).toFixed(1);
  document.getElementById('cfgGapHours').value=CONFIG.gapWorkingHoursMin;
  document.getElementById('cfgGapPmCall').value=(CONFIG.gapPmCallRateMin*100).toFixed(1);
- document.getElementById('cfgGapAmExec').value=(CONFIG.gapAmExecutionMin*100).toFixed(1);
- document.getElementById('cfgGapPmExec').value=(CONFIG.gapPmExecutionMin*100).toFixed(1);
+ document.getElementById('cfgGapPmCoverage').value=(CONFIG.gapPmCoverageMin*100).toFixed(1);
  document.getElementById('cfgGapFrequency').value=(CONFIG.gapFrequencyMin*100).toFixed(1);
  document.getElementById('cfgGapClassA').value=(CONFIG.gapClassAMin*100).toFixed(1);
  document.getElementById('cfgGapClassC').value=(CONFIG.gapClassCMax*100).toFixed(1);
@@ -1083,7 +1158,7 @@ function fillConfigForm(){
  updateWeightSumHint();
 }
 function updateWeightSumHint(){
- const ids=['cfgWCommercial','cfgWActivity','cfgWCoverage','cfgWCustomer','cfgWProductivity','cfgWDevelopment','cfgWProgress'];
+ const ids=['cfgWTotalAch','cfgWActivity','cfgWCoverage','cfgWCustomer','cfgWProductivity','cfgWProgress','cfgWPerformanceItem'];
  const el=document.getElementById('cfgWeightSum');
  if(!el) return;
  const sum=ids.reduce((s,id)=>{const e=document.getElementById(id);return s+(e?Number(e.value)||0:0)},0);
@@ -1098,14 +1173,14 @@ function saveConfig(){
   const good=Number(document.getElementById('cfgGood').value)/100;
   if([critical,low,needs,stable,good].some(x=>!Number.isFinite(x))){ alert('Please enter valid numbers for all classification thresholds.'); return; }
   if(!(critical<low && low<needs && needs<stable && stable<good)){ alert('Classification thresholds must be in increasing order:\nCritical < Low < Needs Improvement < Stable < Good.'); return; }
-  const wC=Number(document.getElementById('cfgWCommercial').value)/100;
+  const wTotalAch=Number(document.getElementById('cfgWTotalAch').value)/100;
   const wA=Number(document.getElementById('cfgWActivity').value)/100;
   const wCov=Number(document.getElementById('cfgWCoverage').value)/100;
   const wCu=Number(document.getElementById('cfgWCustomer').value)/100;
   const wP=Number(document.getElementById('cfgWProductivity').value)/100;
-  const wD=Number(document.getElementById('cfgWDevelopment').value)/100;
   const wPr=Number(document.getElementById('cfgWProgress').value)/100;
-  if([wC,wA,wCov,wCu,wP,wD,wPr].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all weights.'); return; }
+  const wPerformanceItem=Number(document.getElementById('cfgWPerformanceItem').value)/100;
+  if([wTotalAch,wA,wCov,wCu,wP,wPr,wPerformanceItem].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all weights.'); return; }
   const p1Ach=Number(document.getElementById('cfgP1Ach').value)/100;
   const p1Gaps=Number(document.getElementById('cfgP1Gaps').value);
   const p2Ach=Number(document.getElementById('cfgP2Ach').value)/100;
@@ -1116,20 +1191,19 @@ function saveConfig(){
   if(!(potMin<potMax)){ alert('Potential "from" must be lower than "up to".'); return; }
   const gapWorkingHoursMin=Number(document.getElementById('cfgGapHours').value);
   const gapPmCallRateMin=Number(document.getElementById('cfgGapPmCall').value)/100;
-  const gapAmExecutionMin=Number(document.getElementById('cfgGapAmExec').value)/100;
-  const gapPmExecutionMin=Number(document.getElementById('cfgGapPmExec').value)/100;
+  const gapPmCoverageMin=Number(document.getElementById('cfgGapPmCoverage').value)/100;
   const gapFrequencyMin=Number(document.getElementById('cfgGapFrequency').value)/100;
   const gapClassAMin=Number(document.getElementById('cfgGapClassA').value)/100;
   const gapClassCMax=Number(document.getElementById('cfgGapClassC').value)/100;
   const gapROIMin=Number(document.getElementById('cfgGapROI').value)/100;
   const gapMasterFileMin=Number(document.getElementById('cfgGapMasterFile').value);
-  if([gapWorkingHoursMin,gapPmCallRateMin,gapAmExecutionMin,gapPmExecutionMin,gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all Gap Detection thresholds.'); return; }
+  if([gapWorkingHoursMin,gapPmCallRateMin,gapPmCoverageMin,gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin].some(x=>!Number.isFinite(x)||x<0)){ alert('Please enter valid non-negative numbers for all Gap Detection thresholds.'); return; }
   const updatedConfig=Object.assign({},CONFIG,{
    classCritical:critical,classLow:low,classNeeds:needs,classStable:stable,classGood:good,
-   wCommercial:wC,wActivity:wA,wCoverage:wCov,wCustomer:wCu,wProductivity:wP,wDevelopment:wD,wProgress:wPr,
+   wTotalAch,wActivity:wA,wCoverage:wCov,wCustomer:wCu,wProductivity:wP,wProgress:wPr,wPerformanceItem,
    priorityP1Ach:p1Ach,priorityP1MinGaps:p1Gaps,priorityP2Ach:p2Ach,
    potentialMinAch:potMin,potentialMaxAch:potMax,
-   gapWorkingHoursMin,gapPmCallRateMin,gapAmExecutionMin,gapPmExecutionMin,
+   gapWorkingHoursMin,gapPmCallRateMin,gapPmCoverageMin,
    gapFrequencyMin,gapClassAMin,gapClassCMax,gapROIMin,gapMasterFileMin
   });
   localStorage.setItem(CONFIG_STORAGE_KEY,JSON.stringify(updatedConfig));
@@ -1159,8 +1233,6 @@ function page14(a,b){
  const actions={
    'Low working hours':'Review daily working plan and field-time utilization.',
    'Low PM call rate':'Review PM call plan and doctor routing.',
-   'Weak AM execution':'Joint AM field visit; review AM execution and conversion.',
-   'Weak PM execution':'Joint PM field visit; review frequency, customer mix and conversion.',
    'Frequency coverage gap':'Review PM frequency plan and visit allocation.',
    'Low Class A%':'Review customer mix and increase high-value customer coverage.',
    'High Class C%':'Reduce low-value customer dependency and improve customer mix.',
@@ -1188,7 +1260,7 @@ function page14(a,b){
    let lowPct=rows.length? low/rows.length : 0;
    let gap=topGap(rows);
    return {
-    Name:name, MRs:rows.length, Ach:avg(rows,'Total Ach.%'), Low:low, LowPct:lowPct, Critical:critical,
+    Name:name, MRs:rows.length, Ach:avg(rows,'Total Ach.%'), S1:avg(rows,'S1 Ach%'), PerformanceItem:avg(rows,'Performance Item Ach%'), Low:low, LowPct:lowPct, Critical:critical,
     Progress:avg(rows,'Q2 Vs Q1 Progress'),
     Gap:gap||'No major gap', Flagged:lowPct>FLAG_THRESHOLD,
     Action: gap? (actions[gap]||'Monitor KPI trend and validate root cause with DM.') : 'No dominant issue detected — continue standard monitoring.'
@@ -1203,11 +1275,13 @@ function page14(a,b){
  function renderGroupTable(rows,nameLabel){
   if(!rows.length) return '<div class="insight">No data available for the current selection.</div>';
   return `<div class="scroll"><table><thead><tr>
-   <th>${nameLabel}</th><th>MRs</th><th>Avg Ach.</th><th>Low Performers</th><th>Low %</th><th>Critical</th><th>Progress</th><th>Top Gap</th><th>Status</th><th>Recommendation</th>
+   <th>${nameLabel}</th><th>MRs</th><th>Avg Ach.</th><th>S1 Ach%</th><th>Performance Item Ach%</th><th>Low Performers</th><th>Low %</th><th>Critical</th><th>Progress</th><th>Top Gap</th><th>Status</th><th>Recommendation</th>
   </tr></thead><tbody>${rows.map(x=>`<tr>
    <td><b>${esc(x.Name)}</b></td>
    <td>${fmtN(x.MRs)}</td>
    <td>${fmtPct(x.Ach)}</td>
+   <td>${fmtPct(x.S1)}</td>
+   <td>${fmtPct(x.PerformanceItem)}</td>
    <td>${fmtN(x.Low)}</td>
    <td>${fmtPct(x.LowPct)}</td>
    <td>${fmtN(x.Critical)}</td>
@@ -1249,13 +1323,13 @@ async function downloadStyledExport(exportRows,sheetName,fileName){
  if(typeof ExcelJS==='undefined') throw new Error('Excel export formatter did not load. Please open the dashboard with internet access.');
  const headers=Object.keys(exportRows[0]);
  const percentFields=new Set([
-  'Total Ach.%','AM Ach.%','PM Ach.%','Q1 Ach%','Q2 Ach%','Q3 Ach%','Q4 Ach%',
+  'Total Ach.%','AM Ach.%','PM Ach.%','Q1 Ach%','Q2 Ach%','Q3 Ach%','Q4 Ach%','S1 Ach%','Performance Item Ach%',
   'Q1 Ach.%','Q2 Ach.%','Q3 Ach.%','Q4 Ach.%','Q2 Vs Q1 Progress',
   'AM Call Rate','PM Call Rate','AM Coverage','PM Coverage','PM Coverage by Frequency',
   'Coverage of Served Customers','Class A%','Class C%','ROI of Served Customers'
  ]);
  const integerFields=new Set([
-  'Customers count above 3K','Customers visited 12 or more times','KPI Gaps',
+  'Customers count above 3K','Cov Served','KPI Gaps',
   'Standard Master File','Actual Master File','Master File Gap'
  ]);
  const workbook=new ExcelJS.Workbook();
@@ -1312,6 +1386,8 @@ async function exportToExcel(){
    'Total Sales Value': num(r['Total Sales Value']),
    'Total FCT Value': num(r['Total FCT Value']),
    'Total Ach.%': num(displayAch(r)),
+   'S1 Ach%': num(r['S1 Ach%']),
+   'Performance Item Ach%': num(r['Performance Item Ach%']),
    'AM Ach.%': num(r['AM Ach.%']),
    'PM Ach.%': num(r['PM Ach.%']),
    'Q1 Ach%': num(r['Q1 Ach%']),
@@ -1326,7 +1402,7 @@ async function exportToExcel(){
    'PM Coverage': num(r['PM Coverage']),
    'PM Coverage by Frequency': num(r['PM Coverage by Frequency']),
    'Customers count above 3K': num(r['Customers count above 3K']),
-   'Customers visited 12 or more times': num(r['Customers visited 12 or more times']),
+   'Cov Served': num(r['Cov Served']),
    'Coverage of Served Customers': num(r['Coverage of Served Customers']),
    'Class A%': num(r['Class A%']),
    'Class C%': num(r['Class C%']),
