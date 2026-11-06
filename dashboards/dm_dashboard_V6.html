@@ -103,7 +103,12 @@ const esc=(x)=>String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').r
 const fmtPct=x=>{const n=num(x);return n==null?'—':(n*100).toFixed(1)+'%'};
 const fmtN=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:1})};
 const fmtMoney=x=>{const n=num(x);return n==null?'—':n.toLocaleString(undefined,{maximumFractionDigits:0})};
+const TENURE_GROUPS=['0 to 6 month','6 month to 1 Year','1 year to 2 year','2 Year to 3 year','3 year to 5 year','5 years +'];
 function gapDetailsTitle(r){const gaps=Array.isArray(r.__kpiGapDetails)?r.__kpiGapDetails:[];return gaps.length?gaps.join('\n'):'No identified KPI gaps';}
+function addGap(gaps,name,value,threshold,direction){
+ const impact=direction==='below'?threshold-value:value-threshold;
+ if(impact>0) gaps.push({name,impact:impact/Math.max(Math.abs(threshold),1)});
+}
 function fmtGapCount(value,r){return `<span title="${esc(gapDetailsTitle(r))}">${fmtN(value)}</span>`;}
 
 /* CONFIG holds every editable Classification / Score-weight / Priority / Potential / Gap-detection threshold.
@@ -118,7 +123,8 @@ const DEFAULT_CONFIG = {
  potentialMinAch:0.795, potentialMaxAch:0.995,
  gapPmCallRateMin:0.95, gapAmPhdCoverageMin:0.80,
  gapGlCoverageMin:0.80, gapFreqMin:0.80,
- gapClassAMin:0.25, gapClassCMax:0.10, gapROIThreshold:0.09, gapMinCoachingHalves:207
+ gapClassAMin:0.25, gapClassCMax:0.10, gapROIThreshold:0.09, gapMinCoachingHalves:207,
+ gapMasterFileMin:0, excludedTenureGroups:[]
 };
 const CONFIG_STORAGE_KEY='360-dm-dashboard-config';
 function loadSavedConfig(){
@@ -131,6 +137,8 @@ function loadSavedConfig(){
   Object.keys(DEFAULT_CONFIG).forEach(key=>{
    if(typeof parsed[key]==='number'&&Number.isFinite(parsed[key])) config[key]=parsed[key];
   });
+  if(parsed.gapMasterFilePercent!==true&&typeof parsed.gapMasterFileMin==='number'&&parsed.gapMasterFileMin>0) config.gapMasterFileMin=DEFAULT_CONFIG.gapMasterFileMin;
+  if(Array.isArray(parsed.excludedTenureGroups)) config.excludedTenureGroups=TENURE_GROUPS.filter(group=>parsed.excludedTenureGroups.includes(group));
   if(typeof parsed.wPerformanceItem!=='number'){
    config.wActivity=0.05;
    config.wPerformanceItem=0.05;
@@ -145,11 +153,13 @@ function loadSavedConfig(){
 let CONFIG = loadSavedConfig();
 
 function v(field,r){return num(r[field])}
-function vals(field){return DATA.map(r=>num(r[field])).filter(x=>x!=null)}
+function calculationRows(){return DATA.filter(r=>!CONFIG.excludedTenureGroups.includes(r['Tenure Group']))}
+function vals(field){return calculationRows().map(r=>num(r[field])).filter(x=>x!=null)}
 function pct(field,x,inverse=false){x=num(x);if(x==null)return null;let a=vals(field);if(!a.length)return null;let q=a.filter(z=>z<=x).length/a.length;return inverse?1-q:q}
 function avgA(a){a=a.map(num).filter(x=>x!=null);return a.length?a.reduce((s,x)=>s+x,0)/a.length:null}
-const ratioVals=DATA.map(r=>{let s=num(r['Standard Master File']),a=num(r['Actual Master File']);return s!=null&&s>0&&a!=null?a/s:null}).filter(x=>x!=null);
-function ratioPct(x){x=num(x);if(x==null||!ratioVals.length)return null;return ratioVals.filter(z=>z<=x).length/ratioVals.length}
+function masterFileRatio(r){let s=num(r['Standard Master File']),a=num(r['Actual Master File']);return s!=null&&s>0&&a!=null?Math.min(a/s,1):null}
+function masterFileGapRatio(r){let s=num(r['Standard Master File']),a=num(r['Actual Master File']);return s!=null&&s>0&&a!=null?Math.max((s-a)/s,0):null}
+function ratioPct(x){x=num(x);if(x==null)return null;x=Math.min(x,1);const ratios=calculationRows().map(masterFileRatio).filter(v=>v!=null);return ratios.length?ratios.filter(z=>z<=x).length/ratios.length:null}
 
 function model(){
  const W={totalAch:CONFIG.wTotalAch,activity:CONFIG.wActivity,coverage:CONFIG.wCoverage,customer:CONFIG.wCustomer,productivity:CONFIG.wProductivity,coaching:CONFIG.wCoaching,progress:CONFIG.wProgress,performanceItem:CONFIG.wPerformanceItem};
@@ -157,7 +167,7 @@ function model(){
  let totalAch=avgA(['Total Ach.%','AM Ach.%','PM Ach.%'].map(k=>v(k,r))); totalAch=totalAch==null?null:Math.min(totalAch,1.5)/1.5*100;
  let activity=avgA([pct('AM Call Rate',v('AM Call Rate',r)),pct('PM Call Rate',v('PM Call Rate',r))]); activity=activity==null?null:activity*100;
  let coverage=avgA([pct('AM Coverage',v('AM Coverage',r)),pct('AM PHD Coverage',v('AM PHD Coverage',r)),pct('PM Coverage',v('PM Coverage',r)),pct('PM Coverage by Frequency',v('PM Coverage by Frequency',r)),pct('Coverage of Served Customers',v('Coverage of Served Customers',r)),pct('GL Coverage',v('GL Coverage',r))]); coverage=coverage==null?null:coverage*100;
- let cq=[];let x=pct('Class A%',v('Class A%',r));if(x!=null)cq.push(x);x=pct('Class C%',v('Class C%',r),true);if(x!=null)cq.push(x);let ss=v('Standard Master File',r),aa=v('Actual Master File',r);if(ss!=null&&ss>0&&aa!=null){x=ratioPct(aa/ss);if(x!=null)cq.push(x)}let customer=cq.length?avgA(cq)*100:null;
+ let cq=[];let x=pct('Class A%',v('Class A%',r));if(x!=null)cq.push(x);x=pct('Class C%',v('Class C%',r),true);if(x!=null)cq.push(x);x=masterFileRatio(r);if(x!=null){x=ratioPct(x);if(x!=null)cq.push(x)}let customer=cq.length?avgA(cq)*100:null;
  let productivity=pct('ROI of Served Customers',v('ROI of Served Customers',r));productivity=productivity==null?null:productivity*100;
  let coaching=avgA([pct('Total Coaching Halves',v('Total Coaching Halves',r)),pct('Total Check Halves',v('Total Check Halves',r)),pct('Total Single Halves',v('Total Single Halves',r))]); coaching=coaching==null?null:coaching*100;
  let progress=pct('Q2 vs Q1 Progress',v('Q2 vs Q1 Progress',r)); progress=progress==null?null:progress*100;
@@ -178,7 +188,7 @@ const filterFields={bu:'Business Unite',team:'Team',dm:'DM Name',gov:'Governorat
 const filterLabels={bu:'All Business Units',team:'All Teams',dm:'All DMs',gov:'All Governorates',tenure:'All Tenure Groups'};
 function rowsForOptions(excludeId){
  const f=getFilterValues();
- return DATA.filter(r=>
+ return calculationRows().filter(r=>
   (excludeId==='bu'||!f.bu||r['Business Unite']===f.bu)&&
   (excludeId==='team'||!f.team||r.Team===f.team)&&
   (excludeId==='dm'||!f.dm||r['DM Name']===f.dm)&&
@@ -197,7 +207,7 @@ function updateFilterOptions(){
 ['bu','team','dm','gov','tenure'].forEach(id=>document.getElementById(id).addEventListener('change',()=>{updateFilterOptions();renderAll();}));
 function filtered(){
  const f=getFilterValues();
- return DATA.filter(r=>(!f.bu||r['Business Unite']===f.bu)&&(!f.team||r.Team===f.team)&&(!f.dm||r['DM Name']===f.dm)&&(!f.gov||r.Governorate===f.gov)&&(!f.tenure||r['Tenure Group']===f.tenure));
+ return calculationRows().filter(r=>(!f.bu||r['Business Unite']===f.bu)&&(!f.team||r.Team===f.team)&&(!f.dm||r['DM Name']===f.dm)&&(!f.gov||r.Governorate===f.gov)&&(!f.tenure||r['Tenure Group']===f.tenure));
 }
 function resetFilters(){['bu','team','dm','gov','tenure'].forEach(id=>document.getElementById(id).value='');updateFilterOptions();renderAll()}
 function avg(a,f){let x=a.map(r=>num(r[f])).filter(v=>v!=null&&!Number.isNaN(v));return x.length?x.reduce((s,v)=>s+v,0)/x.length:null}
@@ -413,8 +423,7 @@ function addBasicDerivedRows(rows){
      r['Total Ach.%']=num(r['Total Sales Value'])/num(r['Total FCT Value']);
    if(r['Total Coaching Halves']==null)
      r['Total Coaching Halves']=(num(r['AM Coaching Halves'])||0)+(num(r['PM Coaching Halves'])||0);
-   if(r['Master File Gap']==null && num(r['Standard Master File'])!=null && num(r['Actual Master File'])!=null)
-     r['Master File Gap']=num(r['Standard Master File'])-num(r['Actual Master File']);
+   r['Master File Gap']=masterFileGapRatio(r);
    if(r['Q2 vs Q1 Progress']==null && num(r['Q1 Ach.%'])!=null && num(r['Q2 Ach.%'])!=null)
      r['Q2 vs Q1 Progress']=num(r['Q2 Ach.%'])-num(r['Q1 Ach.%']);
 
@@ -423,7 +432,7 @@ function addBasicDerivedRows(rows){
      if(!isNaN(d)){
        const months=Math.max(0,(now.getFullYear()-d.getFullYear())*12+(now.getMonth()-d.getMonth())-(now.getDate()<d.getDate()?1:0));
        r['Tenure Years']=+(months/12).toFixed(2);
-       r['Tenure Group']=months<6?'New Hire':months<=18?'Early Tenure (6-18m)':months<=36?'Established (19-36m)':'Experienced (36m+)';
+       r['Tenure Group']=months<6?TENURE_GROUPS[0]:months<12?TENURE_GROUPS[1]:months<24?TENURE_GROUPS[2]:months<36?TENURE_GROUPS[3]:months<60?TENURE_GROUPS[4]:TENURE_GROUPS[5];
      }
    }
  });
@@ -440,22 +449,24 @@ function diagnoseMonthlyRows(rows){
    const gl=num(r['GL Coverage']);
    const aClass=num(r['Class A%']), cClass=num(r['Class C%']);
    const roi=num(r['ROI of Served Customers']);
-   const masterGap=num(r['Master File Gap']);
+   const masterGap=masterFileGapRatio(r);
    const coaching=(num(r['Total Coaching Halves'])||0)+(num(r['Total Check Halves'])||0)+(num(r['Total Single Halves'])||0);
 
-   if(pCall!=null && pCall<CONFIG.gapPmCallRateMin) gaps.push('Low PM call rate');
-   if(aPhd!=null && aPhd<CONFIG.gapAmPhdCoverageMin) gaps.push('Low AM PHD coverage');
-   if(freq!=null && freq<CONFIG.gapFreqMin) gaps.push('Frequency coverage gap');
-   if(gl!=null && gl<CONFIG.gapGlCoverageMin) gaps.push('Low GL coverage');
-   if(aClass!=null && aClass<CONFIG.gapClassAMin) gaps.push('Low Class A%');
-   if(cClass!=null && cClass>CONFIG.gapClassCMax) gaps.push('High Class C%');
-   if(masterGap!=null && masterGap>0) gaps.push('Master file gap');
-   if(roi!=null && roi>CONFIG.gapROIThreshold) gaps.push('Low ROI');
-   if(coaching!=null && coaching<CONFIG.gapMinCoachingHalves) gaps.push('Low coaching activity');
+   if(pCall!=null) addGap(gaps,'Low PM call rate',pCall,CONFIG.gapPmCallRateMin,'below');
+   if(aPhd!=null) addGap(gaps,'Low AM PHD coverage',aPhd,CONFIG.gapAmPhdCoverageMin,'below');
+   if(freq!=null) addGap(gaps,'Frequency coverage gap',freq,CONFIG.gapFreqMin,'below');
+   if(gl!=null) addGap(gaps,'Low GL coverage',gl,CONFIG.gapGlCoverageMin,'below');
+   if(aClass!=null) addGap(gaps,'Low Class A%',aClass,CONFIG.gapClassAMin,'below');
+   if(cClass!=null) addGap(gaps,'High Class C%',cClass,CONFIG.gapClassCMax,'above');
+   if(masterGap!=null) addGap(gaps,'Master file gap',masterGap,CONFIG.gapMasterFileMin,'above');
+   if(roi!=null) addGap(gaps,'Low ROI',roi,CONFIG.gapROIThreshold,'above');
+   if(coaching!=null) addGap(gaps,'Low coaching activity',coaching,CONFIG.gapMinCoachingHalves,'below');
 
-   r.__kpiGapDetails=gaps;
-   r['KPI Gaps']=gaps.length;
-   r['Main Gap']=gaps[0]||'No major gap';
+   gaps.sort((x,y)=>y.impact-x.impact);
+   const gapNames=gaps.map(g=>g.name);
+   r.__kpiGapDetails=gapNames;
+   r['KPI Gaps']=gapNames.length;
+   r['Main Gap']=gapNames[0]||'No major gap';
 
    if(ach==null) r['Priority']='P4 – Monitor';
    else if(ach<CONFIG.priorityP1Ach && gaps.length>=CONFIG.priorityP1MinGaps) r['Priority']='P1 – Immediate Intervention';
@@ -463,7 +474,7 @@ function diagnoseMonthlyRows(rows){
    else if(gaps.length) r['Priority']='P3 – Development';
    else r['Priority']='P4 – Monitor';
 
-   r['Potential']=(ach!=null && ach>=CONFIG.potentialMinAch && ach<CONFIG.potentialMaxAch && gaps.length>0)?'High Potential':'Normal';
+   r['Potential']=(ach!=null && ach>=CONFIG.potentialMinAch && ach<CONFIG.potentialMaxAch && gapNames.length>0)?'High Potential':'Normal';
 
    const actions={
      'Low PM call rate':"Review the DM's own PM call plan and doctor routing.",
@@ -865,14 +876,14 @@ function page5(a,b){
 }
 
 function page6(a,b){
- b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtN(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg AM PHD Coverage',fmtPct(avg(a,'AM PHD Coverage')))}${card('Avg GL Coverage',fmtPct(avg(a,'GL Coverage')))}</div>
+ b.innerHTML=`<div class="grid">${card('Avg Master File Gap',fmtPct(avg(a,'Master File Gap')))}${card('Avg Class A%',fmtPct(avg(a,'Class A%')))}${card('Avg Class C%',fmtPct(avg(a,'Class C%')))}${card('Avg AM PHD Coverage',fmtPct(avg(a,'AM PHD Coverage')))}${card('Avg GL Coverage',fmtPct(avg(a,'GL Coverage')))}</div>
  <div class="two"><div class="panel"><h3>Class A vs Class C</h3><div id="p6bar" class="smallplot"></div></div><div class="panel"><h3>Master File Gap</h3><div id="p6mf" class="smallplot"></div></div></div>
  <div class="panel"><h3>Customer Quality Flags</h3><div id="p6table"></div></div>`;
  plot('p6bar',[{x:['Class A%','Class C%'],y:[avg(a,'Class A%')*100,avg(a,'Class C%')*100],type:'bar',text:[fmtPct(avg(a,'Class A%')),fmtPct(avg(a,'Class C%'))],textposition:'auto'}],{yaxis:{title:'%'}});
  let gap=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,15);
- plot('p6mf',[{x:gap.map(r=>r['DM Name']),y:gap.map(r=>r['Master File Gap']),type:'bar'}],{yaxis:{title:'Standard - Actual'},xaxis:{tickangle:-45}});
+ plot('p6mf',[{x:gap.map(r=>r['DM Name']),y:gap.map(r=>r['Master File Gap']),type:'bar'}],{yaxis:{title:'Missing Master File',tickformat:'.0%'},xaxis:{tickangle:-45}});
  let rows=[...a].sort((x,y)=>(y['Master File Gap']||0)-(x['Master File Gap']||0)).slice(0,30);
- b.querySelector('#p6table').innerHTML=table(rows,[['DM Name','DM'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtN],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['AM PHD Coverage','AM PHD Coverage',fmtPct],['GL Coverage','GL Coverage',fmtPct],['ROI of Served Customers','ROI',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct]]);
+ b.querySelector('#p6table').innerHTML=table(rows,[['DM Name','DM'],['Team','Team'],['Standard Master File','Standard'],['Actual Master File','Actual'],['Master File Gap','Gap',fmtPct],['Class A%','Class A',fmtPct],['Class C%','Class C',fmtPct],['AM PHD Coverage','AM PHD Coverage',fmtPct],['GL Coverage','GL Coverage',fmtPct],['ROI of Served Customers','ROI',fmtPct],['Q2 vs Q1 Progress','Progress',fmtPct]]);
 }
 
 function page7(a,b){
@@ -898,7 +909,7 @@ function page8(a,b){
 
 function page9(a,b){
  const tenurePresent = uniq('Tenure Group', a);
- const tenureOrder=['New Hire','Early Tenure (6-18m)','Established (19-36m)','Experienced (36m+)'];
+ const tenureOrder=TENURE_GROUPS;
  let groups = tenureOrder.filter(g=>tenurePresent.includes(g));
  tenurePresent.forEach(g=>{ if(!groups.includes(g)) groups.push(g); });
 
@@ -951,6 +962,11 @@ function page12(a,b){
 
 function page13(a,b){
  b.innerHTML=`<div class="panel">
+  <h3>Tenure Groups Included in Calculations</h3>
+  <div class="insight">Uncheck any tenure group to exclude it from dashboard metrics, comparisons, performance scores and exports. The records remain in the uploaded source data.</div>
+  <div id="cfgTenureGroups" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;padding:8px"></div>
+ </div>
+ <div class="panel">
   <h3>Classification Thresholds (Total Ach.%)</h3>
   <div class="insight">Each band applies from its own threshold up to (not including) the next one.</div>
   <table style="width:100%;font-size:12px;margin-top:8px;max-width:520px">
@@ -1001,6 +1017,7 @@ function page13(a,b){
    <tr><td style="padding:6px 8px">Min Class A%</td><td><input id="cfgGapClassA" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Max Class C%</td><td><input id="cfgGapClassC" type="number" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">ROI gap if above</td><td><input id="cfgGapROI" type="number" step="0.1" style="width:90px"> %</td></tr>
+   <tr><td style="padding:6px 8px">Master File Gap — if missing percentage is above</td><td><input id="cfgGapMasterFile" type="number" min="0" max="100" step="0.1" style="width:90px"> %</td></tr>
    <tr><td style="padding:6px 8px">Min Coaching Halves</td><td><input id="cfgGapCoaching" type="number" step="0.5" style="width:90px"></td></tr>
   </table>
  </div>
@@ -1012,6 +1029,10 @@ function page13(a,b){
  fillConfigForm();
 }
 function fillConfigForm(){
+ const tenureContainer=document.getElementById('cfgTenureGroups');
+ if(tenureContainer){
+  tenureContainer.innerHTML=TENURE_GROUPS.map((group,index)=>`<label style="display:flex;align-items:center;gap:7px;font-size:12px"><input id="cfgTenure${index}" type="checkbox" ${CONFIG.excludedTenureGroups.includes(group)?'':'checked'}> ${esc(group)}</label>`).join('');
+ }
  document.getElementById('cfgCritical').value=(CONFIG.classCritical*100).toFixed(1);
  document.getElementById('cfgLow').value=(CONFIG.classLow*100).toFixed(1);
  document.getElementById('cfgNeeds').value=(CONFIG.classNeeds*100).toFixed(1);
@@ -1037,6 +1058,7 @@ function fillConfigForm(){
  document.getElementById('cfgGapClassA').value=(CONFIG.gapClassAMin*100).toFixed(1);
  document.getElementById('cfgGapClassC').value=(CONFIG.gapClassCMax*100).toFixed(1);
  document.getElementById('cfgGapROI').value=(CONFIG.gapROIThreshold*100).toFixed(1);
+ document.getElementById('cfgGapMasterFile').value=(CONFIG.gapMasterFileMin*100).toFixed(1);
  document.getElementById('cfgGapCoaching').value=CONFIG.gapMinCoachingHalves;
  updateWeightSumHint();
 }
@@ -1080,9 +1102,12 @@ function saveConfig(){
   const gapClassA=Number(document.getElementById('cfgGapClassA').value)/100;
   const gapClassC=Number(document.getElementById('cfgGapClassC').value)/100;
   const gapROIThreshold=Number(document.getElementById('cfgGapROI').value)/100;
+  const gapMasterFileMin=Number(document.getElementById('cfgGapMasterFile').value)/100;
   const gapCoaching=Number(document.getElementById('cfgGapCoaching').value);
-  if([gapPmCall,gapAmPhdCov,gapGlCov,gapFreqMin,gapClassA,gapClassC,gapROIThreshold].some(x=>!Number.isFinite(x))||!Number.isFinite(gapCoaching)){ alert('Please enter valid numbers for all Gap Detection thresholds.'); return; }
+  if([gapPmCall,gapAmPhdCov,gapGlCov,gapFreqMin,gapClassA,gapClassC,gapROIThreshold,gapMasterFileMin].some(x=>!Number.isFinite(x)||x<0)||!Number.isFinite(gapCoaching)){ alert('Please enter valid numbers for all Gap Detection thresholds.'); return; }
+  if(gapMasterFileMin>1){ alert('Master File Gap threshold must be between 0 and 100%.'); return; }
   if(gapCoaching<0){ alert('Minimum Coaching Halves must be zero or higher.'); return; }
+  const excludedTenureGroups=TENURE_GROUPS.filter((_,index)=>!document.getElementById('cfgTenure'+index).checked);
   const updatedConfig=Object.assign({},CONFIG,{
    classCritical:critical,classLow:low,classNeeds:needs,classStable:stable,classGood:good,
    wTotalAch,wActivity:wA,wCoverage:wCov,wCustomer:wCu,wProductivity:wP,wCoaching:wCoach,wProgress:wProg,wPerformanceItem,
@@ -1090,7 +1115,7 @@ function saveConfig(){
    potentialMinAch:potMin,potentialMaxAch:potMax,
    gapPmCallRateMin:gapPmCall,gapAmPhdCoverageMin:gapAmPhdCov,
    gapGlCoverageMin:gapGlCov,gapFreqMin,gapClassAMin:gapClassA,gapClassCMax:gapClassC,
-   gapROIThreshold,gapMinCoachingHalves:gapCoaching
+   gapROIThreshold,gapMasterFileMin,gapMasterFilePercent:true,gapMinCoachingHalves:gapCoaching,excludedTenureGroups
   });
   localStorage.setItem(CONFIG_STORAGE_KEY,JSON.stringify(updatedConfig));
   CONFIG=updatedConfig;
@@ -1098,7 +1123,7 @@ function saveConfig(){
   diagnoseMonthlyRows(DATA);
   renderAll();
   const status=document.getElementById('cfgStatus');
-  if(status){ status.style.color='#16a34a'; status.textContent='Saved. Classification, Score, Priority, Potential and Gap Detection recalculated across the whole dashboard.'; }
+  if(status){ status.style.color='#16a34a'; status.textContent='Saved. Tenure exclusions, Classification, Score, Priority, Potential and Gap Detection recalculated across the dashboard.'; }
  }catch(err){ console.error(err); alert('Could not save settings.\n\n'+err.message); }
 }
 function resetConfigDefaults(){
@@ -1210,11 +1235,11 @@ async function downloadStyledExport(exportRows,sheetName,fileName){
   'Q1 Ach.%','Q2 Ach.%','Q3 Ach.%','Q4 Ach.%','Q2 vs Q1 Progress',
   'AM Call Rate','PM Call Rate','AM Coverage','AM PHD Coverage','PM Coverage',
   'PM Coverage by Frequency','GL Coverage','Coverage of Served Customers',
-  'Class A%','Class C%','ROI of Served Customers'
+  'Class A%','Class C%','ROI of Served Customers','Master File Gap'
  ]);
  const integerFields=new Set([
   'Total Coaching Halves','Total Check Halves','Total Single Halves',
-  'Standard Master File','Actual Master File','Master File Gap','KPI Gaps'
+  'Standard Master File','Actual Master File','KPI Gaps'
  ]);
  const workbook=new ExcelJS.Workbook();
  const worksheet=workbook.addWorksheet(sheetName);
